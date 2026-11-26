@@ -4,9 +4,9 @@ const scrollPositions = {};
 let view = "start", returnView = "start", selectedMode = null, pendingActivity = null;
 let blueprint = BLUEPRINTS[0], scene = "scene", zen = false, remoteVisible = false, windowVisible = true;
 let lastStageKey, lastMiniKey, heroArt, playerBackdrop, environmentArt;
-let toastTimeout, ambientTile, previewMode, portalFlight, bloomFrame = null;
+let toastTimeout, hoveredMode, focusedMode, portalFlight, bloomFrame = null;
 let zenIdle, dimmed = false;
-const DIM_EVENTS = ["pointerdown", "pointermove", "touchstart", "keydown"];
+const DIM_EVENTS = ["pointerdown", "touchstart", "keydown"];
 let renderedTrack = null, renderedPlaying = null;
 const libraryOrder = new Map();
 const preferredMode = () => {
@@ -56,7 +56,7 @@ function showView(next, { focus = true, restoreScroll = false } = {}) {
     document.body.classList.add("player-open");
   } else document.body.classList.remove("player-open");
   motion.clearPreviews();
-  previewMode = null;
+  hoveredMode = focusedMode = null;
   views[view].hidden = true;
   view = next;
   views[view].hidden = false;
@@ -64,6 +64,7 @@ function showView(next, { focus = true, restoreScroll = false } = {}) {
     if (button.dataset.view === (view === "activities" ? "start" : view)) button.setAttribute("aria-current", "page");
     else button.removeAttribute("aria-current");
   });
+  renderTransport();
   scrollTo(0, restoreScroll ? scrollPositions[view] || 0 : 0);
   if (focus) focusHeading();
   syncArt();
@@ -156,7 +157,6 @@ function morphModes(sources) {
 }
 
 function renderModes() {
-  const defaultMode = preferredMode();
   $("modeStrip").replaceChildren(...MODES.map((mode) => {
     const button = document.createElement("button");
     button.type = "button";
@@ -177,17 +177,26 @@ function renderModes() {
     const art = artSlot();
     motion.setArt(art, artForMode(mode.key));
     button.prepend(art);
-    if (mode === defaultMode) ambientTile = art;
-    const highlight = (on) => {
-      if (view !== "start") return;
-      if (on) previewMode = mode;
-      else if (previewMode === mode && !button.matches(":hover, :focus-visible")) previewMode = null;
-      setPalette(previewMode || preferredMode());
-    };
-    button.addEventListener("pointerenter", (event) => { if (event.pointerType !== "touch") highlight(true); });
-    button.addEventListener("pointerleave", () => highlight(false));
-    button.addEventListener("focus", () => { if (button.matches(":focus-visible")) highlight(true); });
-    button.addEventListener("blur", () => highlight(false));
+    button.addEventListener("pointerenter", (event) => {
+      if (view !== "start" || event.pointerType === "touch") return;
+      hoveredMode = mode;
+      syncArt();
+    });
+    button.addEventListener("pointerleave", () => {
+      if (hoveredMode !== mode) return;
+      hoveredMode = null;
+      syncArt();
+    });
+    button.addEventListener("focus", () => {
+      if (view !== "start" || !button.matches(":focus-visible")) return;
+      focusedMode = mode;
+      syncArt();
+    });
+    button.addEventListener("blur", () => {
+      if (focusedMode !== mode) return;
+      focusedMode = null;
+      syncArt();
+    });
     button.addEventListener("click", () => chooseMode(mode.key));
     return button;
   }));
@@ -288,13 +297,16 @@ function launchActivity(key, sourceArt, minutes) {
 function syncArt() {
   const activity = pendingActivity || state.activity;
   const track = getCurrentTrack();
-  const liveMode = MODE_BY_KEY.get(activity?.mode || track?.category);
+  const liveMode = MODE_BY_KEY.get(activity?.mode || track?.category) || preferredMode();
   const browserMode = MODE_BY_KEY.get(selectedMode);
-  setPalette(view === "activities" ? browserMode : view === "start" ? previewMode || preferredMode() : liveMode);
-  const key = activity?.key || track?.slug || "-";
+  const startMode = hoveredMode || focusedMode || preferredMode();
+  setPalette(view === "activities" ? browserMode : view === "start" ? startMode : liveMode);
+  const key = activity?.key || track?.slug || `mode:${liveMode.key}`;
   if (lastStageKey !== key) {
-    motion.setArt(heroArt, activity ? artForActivity(activity) : artForTrack(track));
-    const backdrop = artForMode(liveMode?.key || preferredMode().key);
+    const backdrop = artForMode(liveMode.key);
+    const empty = !activity && !track;
+    heroArt.classList.toggle("mode-poster", empty);
+    motion.setArt(heroArt, activity ? artForActivity(activity) : track ? artForTrack(track) : { ...backdrop, loop: "" });
     motion.setArt(playerBackdrop, backdrop);
     $("heroVisual").style.setProperty("--zen-art", backdrop.poster ? `url("${backdrop.poster}")` : "linear-gradient(#080d17, #101a2b)");
     $("heroVisual").style.setProperty("--zen-focal", backdrop.focal || "center");
@@ -308,8 +320,8 @@ function syncArt() {
   $("heroScene").hidden = scene !== "scene";
   canvas.hidden = scene !== "signal";
   $("signalTools").hidden = scene !== "signal" || zen;
-  if (view === "start" && !previewMode) ambientTile = $("modeGrid").querySelector(`[data-mode="${preferredMode().key}"] .art-slot`);
-  const playingSlot = view === "start" ? ambientTile : view === "activities" ? environmentArt : view === "player" && scene === "scene" ? heroArt : null;
+  const playingSlot = view === "start" ? $("modeGrid").querySelector(`[data-mode="${startMode.key}"] .art-slot`)
+    : view === "activities" ? environmentArt : view === "player" && scene === "scene" ? heroArt : null;
   motion.selectStage(playingSlot, view === "start");
   if (windowVisible && !remoteVisible) syncVisualizer();
   syncBloom();
@@ -420,15 +432,17 @@ function renderPosition() {
 function renderTransport() {
   const track = getCurrentTrack();
   const activity = state.activity || (!track ? pendingActivity : null);
-  const title = activity?.name || state.sessionName || "Choose an activity";
+  const title = activity?.name || track?.title || "Choose an activity";
+  const subtitle = activity ? track?.title || "" : track ? state.sessionName : "";
   $("playerTitle").textContent = title;
-  $("playerMode").textContent = MODE_BY_KEY.get(activity?.mode)?.name || "Now playing";
-  $("currentTrack").textContent = track?.title || "";
+  $("playerMode").textContent = MODE_BY_KEY.get(activity?.mode || track?.category)?.name || "Now playing";
+  $("currentTrack").textContent = subtitle;
   $("miniTitle").textContent = title;
-  $("miniTrack").textContent = track?.title || "Dreamlight";
+  $("miniTrack").textContent = subtitle || "Dreamlight";
   const playing = playbackRunning();
-  $("transport").hidden = !state.hasStarted;
-  document.body.classList.toggle("has-started", state.hasStarted);
+  const showBar = state.hasStarted && view !== "player";
+  $("transport").hidden = !showBar;
+  document.body.classList.toggle("has-started", showBar);
   $("dimScreen").hidden = state.activity?.key !== "deep_sleep" || !playing;
   if ($("dimScreen").hidden) setDim(false);
   const streak = focusStreak();
@@ -443,7 +457,7 @@ function renderTransport() {
   document.querySelectorAll(".stop-button").forEach((button) => { button.hidden = state.activity?.key !== "deep_sleep"; });
   document.querySelectorAll('[data-transport="previous"], [data-transport="next"]').forEach((button) => { button.disabled = !track; });
   const resume = ACTIVITY_BY_KEY.get(state.lastActivity);
-  $("resumeBtn").hidden = !resume;
+  $("resumeBtn").hidden = !resume || playing;
   if (resume) $("resumeBtn").querySelector("span").textContent = `Resume ${resume.name}`;
   $("breathBtn").setAttribute("aria-pressed", String(state.breathOn));
   $("breathBtn").setAttribute("aria-label", state.breathOn ? "Turn breath pacer off" : "Turn breath pacer on");
@@ -787,8 +801,11 @@ function bindControls() {
   $("skipBreak").addEventListener("click", skipBreak);
   $("dismissWake").addEventListener("click", dismissWake);
   $("dimScreen").addEventListener("click", () => setDim(!dimmed));
+  document.addEventListener("pointermove", () => { if (zen) wakeZenChrome(); }, { passive: true });
   DIM_EVENTS.forEach((event) => document.addEventListener(event, (e) => {
-    if (dimmed && !e.target.closest?.("#dimScreen")) setDim(false);
+    const activatesDimButton = e.target.closest?.("#dimScreen") &&
+      (event !== "keydown" || e.key === " " || e.key === "Enter");
+    if (dimmed && !activatesDimButton) setDim(false);
     if (zen) wakeZenChrome();
   }, { passive: true }));
   document.querySelectorAll("dialog").forEach((dialog) => {
@@ -809,7 +826,8 @@ function bindControls() {
     button.addEventListener("click", actions[button.dataset.transport]);
   });
   document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => {
-    showView(button.dataset.view === "start" && selectedMode ? "activities" : button.dataset.view, { restoreScroll: true });
+    if (button.dataset.view === "start") resetModes();
+    else showView(button.dataset.view, { restoreScroll: true });
   }));
   document.querySelector("[data-home]").addEventListener("click", resetModes);
   document.querySelectorAll("[data-dialog]").forEach((button) => button.addEventListener("click", () => openDialog(button.dataset.dialog, button)));
@@ -855,7 +873,8 @@ document.addEventListener("keydown", (event) => {
   if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || document.querySelector("dialog[open]")) return;
   if (event.key === "Escape" && zen) { setZen(false); return; }
   const focused = document.activeElement;
-  if (focused !== document.body && focused !== document.documentElement) return;
+  if (focused !== document.body && focused !== document.documentElement &&
+      focused !== headings[view] && focused !== $("main")) return;
   const shortcuts = {
     " ": togglePlayback, n: () => nextTrack(), p: previousTrack,
     m: () => setVolume(state.volume, !state.muted),
