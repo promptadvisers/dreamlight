@@ -331,7 +331,6 @@ dialog::backdrop { background: #050a14bb; }
   .hero-scene, #vizCanvas { border-radius: 22px; }
   .player-controls { width: 100%; position: static; }
   .player-controls .back-button { position: absolute; top: 10px; left: var(--gutter); min-height: 36px; margin: 0; z-index: 3; }
-  .signal-on .player-controls .back-button { position: static; min-height: 30px; margin-bottom: 4px; }
   .player-stage:not(.signal-on) .visual-tools { flex-direction: column; align-items: end; gap: 5px; }
   .player-stage:not(.signal-on) .visual-tools .segments { flex-direction: column; }
   .player-stage:not(.signal-on) .visual-tools .segments button { padding-inline: 6px; }
