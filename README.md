@@ -1,12 +1,39 @@
-# Dreamlight — Neural Focus Studio
+# Dreamlight · Focus Music Studio
 
-Dreamlight is an open, portable, zero-lock-in functional focus-music studio built with plain Python (`numpy` + `Pillow` + `ffmpeg`) audio synthesis and a dependency-free static player with 14 activities across Focus, Relax, Sleep, and Meditate.
+Free, open-source focus music. Pick what you're doing (deep work, morning coffee, study, wind down, power nap…) and music starts instantly. There's no account, no ads and no subscription, and it runs offline.
 
-It runs anywhere:
-- **Static website** (`web/` served by `python3 -m http.server`, Vercel, Cloudflare Pages, Netlify, or GitHub Pages)
-- **Offline desktop app** (`desktop/`, an Electron wrapper serving `web/` from disk over loopback with no account or external network connection)
+- **25 one-hour functional-music tracks**, generated with plain Python (`numpy`). They use true binaural beats plus rhythmic amplitude modulation, from 1.5 Hz delta for sleep to 42 Hz gamma for focus.
+- **14 activities across Focus, Relax, Sleep and Meditate**, each with its own motion artwork, a default session length, intervals (25/5), a gentle power-nap wake and a breath pacer.
+- **Runs three ways from the same files:** a static website, an offline Mac/Windows desktop app (Electron) with a menu bar remote, and on phones.
+- **No lock-in.** Plain files you own. Rebuild it, host it anywhere, change anything.
 
-Serve the `web/` directory as-is. The player requires no build step, bundler, or framework.
+> Binaural beats need stereo headphones. Dreamlight is music for focus and relaxation, not a medical device.
+
+## Get it running
+
+```bash
+git clone https://github.com/promptadvisers/dreamlight && cd dreamlight
+
+# 1. Get the music (2.2 GB of MP3s from the release), or render it yourself (step 4)
+gh release download audio-v1 --repo promptadvisers/dreamlight --dir web/audio
+
+# 2. Run the web player
+python3 server.py 8787          # then open http://localhost:8787
+
+# 3. Or run the desktop app (menu bar remote, Dock timer, plays offline)
+cd desktop && npm install && npm start
+#    Build a standalone Mac app into /Applications:  ./build-mac.sh --install
+
+# 4. Render the tracks yourself instead of downloading them
+pip install -r requirements.txt && python3 -m generators list
+python3 -m generators render --track dreamlight
+```
+
+## Credits
+
+- **Music:** generated with Python and NumPy. The generators are in `generators/`.
+- **Motion graphics:** made with [Higgsfield](https://higgsfield.ai). Activity tiles, mode scenes and animated covers were generated as images, then turned into seamless video loops.
+- **Built with AI:** Claude (Anthropic), with design reviews and implementation from Gemini 4 Neon and GPT-6.2 Sol.
 
 ## Repository Layout
 

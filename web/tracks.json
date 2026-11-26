@@ -166,7 +166,8 @@
       },
       "duration": 3600.0,
       "sizeMb": 82.4,
-      "url": "audio/11_cobalt_lattice_gamma_42hz_1hr.mp3"
+      "url": "audio/11_cobalt_lattice_gamma_42hz_1hr.mp3",
+      "coverLoop": "covers/loops/cobalt_lattice.mp4"
     },
     {
       "id": "track-5",
@@ -207,7 +208,8 @@
       },
       "duration": 3600.0,
       "sizeMb": 82.4,
-      "url": "audio/12_prism_spark_gamma_36hz_1hr.mp3"
+      "url": "audio/12_prism_spark_gamma_36hz_1hr.mp3",
+      "coverLoop": "covers/loops/prism_spark.mp4"
     },
     {
       "id": "track-6",
@@ -248,7 +250,8 @@
       },
       "duration": 3600.0,
       "sizeMb": 82.4,
-      "url": "audio/13_kinetic_forge_high_beta_24hz_1hr.mp3"
+      "url": "audio/13_kinetic_forge_high_beta_24hz_1hr.mp3",
+      "coverLoop": "covers/loops/kinetic_forge.mp4"
     },
     {
       "id": "track-7",
@@ -289,7 +292,8 @@
       },
       "duration": 3600.0,
       "sizeMb": 82.4,
-      "url": "audio/14_aurora_ascent_high_beta_20hz_1hr.mp3"
+      "url": "audio/14_aurora_ascent_high_beta_20hz_1hr.mp3",
+      "coverLoop": "covers/loops/aurora_ascent.mp4"
     },
     {
       "id": "track-8",
@@ -372,7 +376,8 @@
       },
       "duration": 3600.0,
       "sizeMb": 82.4,
-      "url": "audio/15_quartz_engine_mid_beta_17hz_1hr.mp3"
+      "url": "audio/15_quartz_engine_mid_beta_17hz_1hr.mp3",
+      "coverLoop": "covers/loops/quartz_engine.mp4"
     },
     {
       "id": "track-10",
@@ -497,7 +502,8 @@
       },
       "duration": 3600.0,
       "sizeMb": 82.4,
-      "url": "audio/16_cedar_study_low_beta_13_5hz_1hr.mp3"
+      "url": "audio/16_cedar_study_low_beta_13_5hz_1hr.mp3",
+      "coverLoop": "covers/loops/cedar_study.mp4"
     },
     {
       "id": "track-13",
@@ -538,7 +544,8 @@
       },
       "duration": 3600.0,
       "sizeMb": 82.4,
-      "url": "audio/17_golden_atelier_smr_13hz_1hr.mp3"
+      "url": "audio/17_golden_atelier_smr_13hz_1hr.mp3",
+      "coverLoop": "covers/loops/golden_atelier.mp4"
     },
     {
       "id": "track-14",
@@ -621,7 +628,8 @@
       },
       "duration": 3600.0,
       "sizeMb": 82.4,
-      "url": "audio/18_moss_courtyard_alpha_11hz_1hr.mp3"
+      "url": "audio/18_moss_courtyard_alpha_11hz_1hr.mp3",
+      "coverLoop": "covers/loops/moss_courtyard.mp4"
     },
     {
       "id": "track-16",
@@ -746,7 +754,8 @@
       },
       "duration": 3600.0,
       "sizeMb": 82.4,
-      "url": "audio/19_hearth_ember_alpha_8hz_1hr.mp3"
+      "url": "audio/19_hearth_ember_alpha_8hz_1hr.mp3",
+      "coverLoop": "covers/loops/hearth_ember.mp4"
     },
     {
       "id": "track-19",
@@ -787,7 +796,8 @@
       },
       "duration": 3600.0,
       "sizeMb": 82.4,
-      "url": "audio/20_dusk_lagoon_theta_7_5hz_1hr.mp3"
+      "url": "audio/20_dusk_lagoon_theta_7_5hz_1hr.mp3",
+      "coverLoop": "covers/loops/dusk_lagoon.mp4"
     },
     {
       "id": "track-20",
@@ -870,7 +880,8 @@
       },
       "duration": 3600.0,
       "sizeMb": 82.4,
-      "url": "audio/21_saffron_sanctuary_theta_5_5hz_1hr.mp3"
+      "url": "audio/21_saffron_sanctuary_theta_5_5hz_1hr.mp3",
+      "coverLoop": "covers/loops/saffron_sanctuary.mp4"
     },
     {
       "id": "track-22",
@@ -911,7 +922,8 @@
       },
       "duration": 3600.0,
       "sizeMb": 82.4,
-      "url": "audio/22_cloud_drift_theta_4_5hz_1hr.mp3"
+      "url": "audio/22_cloud_drift_theta_4_5hz_1hr.mp3",
+      "coverLoop": "covers/loops/cloud_drift.mp4"
     },
     {
       "id": "track-23",
@@ -994,7 +1006,8 @@
       },
       "duration": 3600.0,
       "sizeMb": 82.4,
-      "url": "audio/23_lunar_cradle_delta_2_5hz_1hr.mp3"
+      "url": "audio/23_lunar_cradle_delta_2_5hz_1hr.mp3",
+      "coverLoop": "covers/loops/lunar_cradle.mp4"
     },
     {
       "id": "track-25",
@@ -1035,7 +1048,8 @@
       },
       "duration": 3600.0,
       "sizeMb": 82.4,
-      "url": "audio/24_deep_trench_delta_1_5hz_1hr.mp3"
+      "url": "audio/24_deep_trench_delta_1_5hz_1hr.mp3",
+      "coverLoop": "covers/loops/deep_trench.mp4"
     }
   ]
 }
