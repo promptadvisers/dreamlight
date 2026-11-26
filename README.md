@@ -165,3 +165,7 @@ For public static hosting, place the rendered MP3s in `web/audio/` (or mirror th
 
 - Audio synthesis, DSP engines, cover art, and static player built with plain Python (`numpy`, `Pillow`), `ffmpeg`, HTML/CSS/Canvas/Web Audio, and Electron.
 - Designed to remain portable across static hosts, local desktop apps, and standalone artifacts without vendor lock-in.
+
+## License
+
+MIT. See `LICENSE`. Use it, fork it, ship your own version.
