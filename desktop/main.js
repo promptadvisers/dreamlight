@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, nativeImage } = require("electron");
+const { app, BrowserWindow, Menu, nativeImage, ipcMain } = require("electron");
 const setupMenuBar = require("./menubar");
 const fs = require("fs");
 const http = require("http");
@@ -20,12 +20,28 @@ const MIME_TYPES = {
   ".wav": "audio/wav",
 };
 
+function motionInventory() {
+  return ["motion/modes", "motion/activities", "covers/loops"].flatMap((folder) => {
+    try {
+      return fs.readdirSync(path.join(WEB_DIR, folder), { withFileTypes: true })
+        .filter((entry) => entry.isFile() && /\.(jpg|mp4)$/.test(entry.name))
+        .map((entry) => `${folder}/${entry.name}`);
+    } catch { return []; }
+  }).sort();
+}
+
 function startOfflineStaticServer() {
   const server = http.createServer((req, res) => {
     const reqUrl = new URL(req.url || "/", "http://127.0.0.1");
     let relPath = decodeURIComponent(reqUrl.pathname).replace(/^\/+/, "");
     if (!relPath) relPath = "index.html";
     if (relPath === "api/tracks") relPath = "tracks.json";
+    if (relPath === "motion-index.json") {
+      const data = JSON.stringify(motionInventory());
+      res.writeHead(200, { "Content-Type": MIME_TYPES[".json"], "Content-Length": Buffer.byteLength(data), "Cache-Control": "no-cache" });
+      res.end(req.method === "HEAD" ? undefined : data);
+      return;
+    }
 
     const fullPath = path.resolve(WEB_DIR, relPath);
     if (!fullPath.startsWith(WEB_DIR + path.sep) && fullPath !== WEB_DIR) {
@@ -85,6 +101,28 @@ function startOfflineStaticServer() {
 let staticServer = null;
 let mainWindow = null;
 
+function preferencesPath() {
+  return path.join(app.getPath("userData"), "dreamlight-preferences.json");
+}
+
+ipcMain.on("dreamlight:prefs:read", (event) => {
+  let data = null;
+  if (event.sender === mainWindow?.webContents) {
+    try { data = fs.readFileSync(preferencesPath(), "utf8"); } catch {}
+  }
+  event.returnValue = data;
+});
+ipcMain.on("dreamlight:prefs:write", (event, data) => {
+  if (event.sender !== mainWindow?.webContents || typeof data !== "string" || data.length > 65536) return;
+  const file = preferencesPath();
+  try {
+    fs.writeFileSync(`${file}.tmp`, data);
+    fs.renameSync(`${file}.tmp`, file);
+  } catch (error) {
+    console.warn("Could not save Dreamlight preferences:", error.message);
+  }
+});
+
 function showMainWindow() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   if (mainWindow.isMinimized()) mainWindow.restore();
@@ -102,9 +140,10 @@ async function createWindow() {
     height: 860,
     minWidth: 390,
     minHeight: 640,
-    backgroundColor: "#03050c",
-    title: "Dreamlight — Neural Focus Studio",
+    backgroundColor: "#0a0e17",
+    title: "Dreamlight",
     webPreferences: {
+      preload: path.join(__dirname, "player-preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -119,26 +158,27 @@ async function createWindow() {
     if (!app.isQuitting) { e.preventDefault(); mainWindow.hide(); }
   });
 
-  const run = (js) => mainWindow.webContents.executeJavaScript(js, true).catch(() => null);
-  setupMenuBar({ getMainWindow: () => mainWindow, showMainWindow, baseUrl });
+  const syncVisibility = () => {
+    const visible = mainWindow.isVisible() && !mainWindow.isMinimized();
+    mainWindow.webContents.executeJavaScript(`window.dreamlight?.setWindowVisible(${visible})`).catch(() => {});
+  };
+  ["show", "hide", "restore", "minimize"].forEach((event) => mainWindow.on(event, syncVisibility));
+  mainWindow.webContents.on("did-finish-load", syncVisibility);
+
+  const remote = setupMenuBar({ getMainWindow: () => mainWindow, showMainWindow, baseUrl });
 
   if (process.platform === "darwin" && app.dock) {
     app.dock.setIcon(nativeImage.createFromPath(path.join(__dirname, "assets", "icon-1024.png")));
     app.dock.setMenu(Menu.buildFromTemplate([
-      { label: "Play / Pause", click: () => run("togglePlay()") },
-      { label: "Next session", click: () => run("playNext(true)") },
-      { label: "25 min focus", click: () => run("setFocusTimer(25)") },
-      { label: "50 min focus", click: () => run("setFocusTimer(50)") },
+      { label: "Play / Pause", click: () => remote.run("toggle") },
+      { label: "Next track", click: () => remote.run("next") },
+      { label: "25 min timer", click: () => remote.run("setTimer", 25) },
+      { label: "50 min timer", click: () => remote.run("setTimer", 50) },
     ]));
-    // Dock badge shows the focus timer countdown while it runs.
-    setInterval(async () => {
-      const t = await run("state.timerTotalSec ? Math.ceil(state.timerRemainSec / 60) + 'm' : ''");
-      app.dock.setBadge(t || "");
-    }, 5000);
   }
 }
 
-app.on("before-quit", () => { app.isQuitting = true; });
+app.on("before-quit", () => { app.isQuitting = true; staticServer?.close(); });
 
 app.whenReady().then(createWindow);
 

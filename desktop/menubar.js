@@ -1,149 +1,159 @@
-// Dreamlight menu bar companion: a live tray item with a mini player popover.
-// The main window keeps playing audio; this module only reads its state and sends it commands.
 const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, globalShortcut, screen } = require("electron");
 const path = require("path");
 
 const ASSETS = path.join(__dirname, "assets");
+const COMMANDS = new Set(["toggle", "next", "prev", "stop", "setTimer", "startActivity", "retry", "zen", "breath"]);
 
-// Runs inside the player page. Everything it touches is a global of web/index.html.
-const READ_STATE = `(() => {
-  try {
-    const t = getCurrentTrack() || {};
-    const el = decks[activeDeck].el;
-    return {
-      ok: true,
-      title: t.title || "Dreamlight", subtitle: t.subtitle || "", band: t.band || "", bpm: t.bpm || "", key: t.key || "",
-      mood: t.mood || "", cover: t.cover || "", coverLoop: t.coverLoop || "", palette: t.palette || [],
-      playing: !!state.isPlaying, cur: el.currentTime || 0, dur: (isFinite(el.duration) && el.duration) || t.duration || 3600,
-      timerTotal: state.timerTotalSec || 0, timerRemain: state.timerRemainSec || 0,
-      focusToday: state.focusSecondsToday || 0, stack: state.activeStack,
-      blueprints: BLUEPRINTS.map((b) => ({ key: b.key, name: b.name, meta: b.meta, cover: b.cover })),
-      upNext: (() => { const i = getNextTrackIndex(); const n = state.queue[i]; return n ? n.title : ""; })(),
-    };
-  } catch (e) { return { ok: false, error: String(e) }; }
-})()`;
-
-const READ_SPECTRUM = `(() => {
-  try {
-    if (!analyser || !state.isPlaying) return null;
-    const a = new Uint8Array(analyser.frequencyBinCount); analyser.getByteFrequencyData(a);
-    const out = []; const n = 28;
-    for (let i = 0; i < n; i++) { const lo = Math.floor(Math.pow(i / n, 1.7) * a.length * 0.55), hi = Math.max(lo + 1, Math.floor(Math.pow((i + 1) / n, 1.7) * a.length * 0.55)); let s = 0; for (let j = lo; j < hi; j++) s += a[j]; out.push(s / (hi - lo) / 255); }
-    return out;
-  } catch (e) { return null; }
-})()`;
-
-const COMMANDS = {
-  toggle: () => "togglePlay()",
-  next: () => "playNext(true)",
-  prev: () => "playPrev()",
-  timer: (m) => `setFocusTimer(${parseInt(m, 10) || 0})`,
-  stack: (k) => `applyStack(${JSON.stringify(String(k))}, true)`,
-  zen: () => "toggleZen()",
-  breath: () => "toggleBreath()",
-};
-
-function fmt(sec) {
-  sec = Math.max(0, Math.round(sec));
-  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
-  return h ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}` : `${m}:${String(s).padStart(2, "0")}`;
+function fmt(seconds) {
+  const s = Math.max(0, Math.ceil(seconds));
+  const h = Math.floor(s / 3600);
+  const m = String(Math.floor(s / 60) % 60).padStart(h ? 2 : 1, "0");
+  return `${h ? h + ":" : ""}${m}:${String(s % 60).padStart(2, "0")}`;
 }
 
 module.exports = function setupMenuBar({ getMainWindow, showMainWindow, baseUrl }) {
-  const icon = nativeImage.createFromPath(path.join(ASSETS, "trayTemplate.png"));
-  icon.setTemplateImage(true);
-  const tray = new Tray(icon);
+  const image = nativeImage.createFromPath(path.join(ASSETS, "trayTemplate.png"));
+  image.setTemplateImage(true);
+  const tray = new Tray(image);
   tray.setToolTip("Dreamlight");
 
   const pop = new BrowserWindow({
-    width: 340, height: 628, show: false, frame: false, resizable: false, movable: false,
+    width: 328, height: 390, show: false, frame: false, resizable: false, movable: false,
     fullscreenable: false, skipTaskbar: true, alwaysOnTop: true, transparent: true,
     vibrancy: "popover", visualEffectState: "active", hasShadow: true,
-    webPreferences: { preload: path.join(__dirname, "tray-preload.js"), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false },
+    webPreferences: { preload: path.join(__dirname, "tray-preload.js"), contextIsolation: true, sandbox: true, backgroundThrottling: false },
   });
   pop.loadFile(path.join(__dirname, "tray.html"), { query: { base: baseUrl } });
   pop.on("blur", () => { if (!pop.webContents.isDevToolsOpened()) pop.hide(); });
 
+  async function evaluate(expression) {
+    const main = getMainWindow();
+    if (!main || main.isDestroyed() || main.webContents.isLoading()) return null;
+    try { return await main.webContents.executeJavaScript(expression, true); } catch { return null; }
+  }
+
+  const call = (method, ...args) => evaluate(`window.dreamlight?.${method}(...${JSON.stringify(args)})`);
   let last = null;
-  const run = async (js) => {
-    const w = getMainWindow();
-    if (!w || w.isDestroyed()) return null;
-    try { return await w.webContents.executeJavaScript(js, true); } catch { return null; }
-  };
+  let reading = false;
 
-  function updateTitle(s) {
-    if (!s || !s.ok) { tray.setTitle(""); return; }
-    let title = "";
-    if (s.timerTotal > 0) title = `${s.playing ? "" : "❚❚ "}${fmt(s.timerRemain)}`;
-    else if (s.playing) title = s.title.length > 18 ? s.title.slice(0, 17) + "…" : s.title;
-    tray.setTitle(title ? ` ${title}` : "", { fontType: "monospacedDigit" });
-    tray.setToolTip(s.playing ? `Dreamlight · ${s.title} · ${s.band}` : "Dreamlight (paused)");
+  function updateTitle(state) {
+    const title = state.timerTotal ? `${state.timerRunning ? "" : "❚❚ "}${fmt(state.timerRemain)}`
+      : state.playing ? state.name.length > 18 ? state.name.slice(0, 17) + "…" : state.name : "";
+    if (process.platform === "darwin") {
+      tray.setTitle(title ? ` ${title}` : "", { fontType: "monospacedDigit" });
+      app.dock?.setBadge(state.timerTotal ? `${Math.ceil(state.timerRemain / 60)}m` : "");
+    }
+    tray.setToolTip(state.playing ? `Dreamlight · ${state.title}` : "Dreamlight");
   }
 
-  // State loop: once a second for the menu bar title, faster spectrum only while the popover is open.
-  setInterval(async () => {
-    const s = await run(READ_STATE);
-    if (s) { last = s; updateTitle(s); if (pop.isVisible()) pop.webContents.send("dl:state", s); }
-  }, 1000);
-  setInterval(async () => {
-    if (!pop.isVisible()) return;
-    const sp = await run(READ_SPECTRUM);
-    pop.webContents.send("dl:spectrum", sp);
-  }, 50);
-
-  function positionPopover() {
-    const b = tray.getBounds();
-    const d = screen.getDisplayNearestPoint({ x: b.x, y: b.y }).workArea;
-    const [w] = pop.getSize();
-    let x = Math.round(b.x + b.width / 2 - w / 2);
-    x = Math.min(Math.max(x, d.x + 8), d.x + d.width - w - 8);
-    pop.setPosition(x, Math.round(d.y + 6), false);
+  async function refresh() {
+    if (reading || pop.isDestroyed()) return;
+    reading = true;
+    try {
+      const data = await evaluate(`(() => {
+        const player = window.dreamlight;
+        if (!player) return null;
+        return { ...player.getState(), modes: player.modes, activities: player.activities, presets: player.timerPresets };
+      })()`);
+      if (!data || pop.isDestroyed()) return;
+      last = data;
+      updateTitle(data);
+      if (pop.isVisible()) pop.webContents.send("dl:state", data);
+    } finally {
+      reading = false;
+    }
   }
+
+  function run(method, ...args) {
+    if (!COMMANDS.has(method)) return;
+    const result = call(method, ...args);
+    result.finally(refresh);
+    return result;
+  }
+
+  const timer = setInterval(refresh, 1000);
+  let visibleTimer = null;
+  pop.on("show", async () => {
+    await call("setRemoteVisible", true);
+    if (pop.isDestroyed() || !pop.isVisible()) return;
+    pop.webContents.send("dl:visibility", true);
+    if (last) pop.webContents.send("dl:state", last);
+    refresh();
+    clearInterval(visibleTimer);
+    visibleTimer = setInterval(refresh, 250);
+  });
+  pop.on("hide", () => {
+    pop.webContents.send("dl:visibility", false);
+    call("setRemoteVisible", false);
+    clearInterval(visibleTimer);
+  });
+  pop.webContents.on("did-finish-load", () => {
+    pop.webContents.send("dl:visibility", pop.isVisible());
+    refresh();
+  });
 
   function togglePopover() {
     if (pop.isVisible()) { pop.hide(); return; }
-    positionPopover();
-    pop.show(); pop.focus();
-    if (last) pop.webContents.send("dl:state", last);
+    const bounds = tray.getBounds();
+    const work = screen.getDisplayNearestPoint({ x: bounds.x, y: bounds.y }).workArea;
+    const [width, height] = pop.getSize();
+    const x = Math.min(Math.max(bounds.x + (bounds.width - width) / 2, work.x + 6), work.x + work.width - width - 6);
+    const y = Math.min(Math.max(bounds.y + bounds.height + 6, work.y + 6), work.y + work.height - height - 6);
+    pop.setPosition(Math.round(x), Math.round(y), false);
+    pop.show();
+    pop.focus();
+  }
+
+  function raisePlayer() {
+    pop.hide();
+    showMainWindow();
   }
 
   function contextMenu() {
-    const s = last || {};
-    const stacks = (s.blueprints || []).map((b) => ({ label: `${b.name}  ·  ${b.meta}`, type: "radio", checked: s.stack === b.key, click: () => run(COMMANDS.stack(b.key)) }));
-    const timers = [0, 25, 45, 60, 90].map((m) => ({ label: m ? `${m} min focus` : "Endless", type: "radio", checked: (s.timerTotal || 0) === m * 60, click: () => run(COMMANDS.timer(m)) }));
     return Menu.buildFromTemplate([
-      { label: s.title ? `${s.playing ? "▶" : "❚❚"}  ${s.title}` : "Dreamlight", enabled: false },
-      { label: s.band ? `${s.band} · ${s.bpm} BPM · ${s.key}` : "", enabled: false, visible: !!s.band },
+      { label: last?.title || "Dreamlight", enabled: false },
       { type: "separator" },
-      { label: s.playing ? "Pause" : "Play", accelerator: "CommandOrControl+Shift+Space", click: () => run(COMMANDS.toggle()) },
-      { label: "Next session", click: () => run(COMMANDS.next()) },
-      { label: "Previous session", click: () => run(COMMANDS.prev()) },
+      { label: last?.playing ? "Pause" : "Play", accelerator: "CommandOrControl+Shift+Space", click: () => run("toggle") },
+      { label: "Next track", click: () => run("next") },
+      { label: "Previous track", click: () => run("prev") },
+      { label: "Stop session", click: () => run("stop") },
       { type: "separator" },
-      { label: "Focus blueprint", submenu: stacks },
-      { label: "Focus timer", submenu: timers },
-      { label: "Breath pacer", click: () => { showMainWindow(); run(COMMANDS.breath()); } },
-      { label: "Cinema Zen", click: () => { showMainWindow(); run(COMMANDS.zen()); } },
+      { label: "Start an activity", submenu: (last?.modes || []).map((mode) => ({
+        label: mode.name, submenu: last.activities.filter((activity) => activity.mode === mode.key)
+          .map((activity) => ({ label: activity.name, click: () => run("startActivity", activity.key) })),
+      })) },
+      { label: "Session timer", submenu: [
+        { label: "Continuous", click: () => run("setTimer", 0) },
+        { label: "Intervals (25 / 5)", click: () => run("setTimer", 25, true) },
+        ...(last?.presets || []).map((minutes) => ({ label: `${minutes} min`, click: () => run("setTimer", minutes) })),
+      ] },
+      { label: "Breath pacer", click: () => { raisePlayer(); run("breath"); } },
+      { label: "Cinema Zen", click: () => { raisePlayer(); run("zen"); } },
       { type: "separator" },
-      { label: "Open Dreamlight", click: showMainWindow },
-      { label: "Open at login", type: "checkbox", checked: app.getLoginItemSettings().openAtLogin, click: (i) => app.setLoginItemSettings({ openAtLogin: i.checked, openAsHidden: true }) },
-      { type: "separator" },
-      { label: "Quit Dreamlight", accelerator: "CommandOrControl+Q", click: () => { app.isQuitting = true; app.quit(); } },
+      { label: "Open Dreamlight", click: raisePlayer },
+      ...(process.platform === "darwin" ? [
+        { label: "Open at login", type: "checkbox", checked: app.getLoginItemSettings().openAtLogin, click: (item) => app.setLoginItemSettings({ openAtLogin: item.checked, openAsHidden: true }) },
+      ] : []),
+      { label: "Quit Dreamlight", accelerator: "CommandOrControl+Q", click: () => app.quit() },
     ]);
   }
 
   tray.on("click", togglePopover);
   tray.on("right-click", () => tray.popUpContextMenu(contextMenu()));
-
-  ipcMain.on("dl:cmd", (_e, name, arg) => {
-    if (name === "open") { pop.hide(); showMainWindow(); return; }
+  ipcMain.on("dl:cmd", (event, name, ...args) => {
+    if (event.sender !== pop.webContents) return;
+    if (name === "open") { raisePlayer(); return; }
     if (name === "menu") { tray.popUpContextMenu(contextMenu()); return; }
-    const f = COMMANDS[name];
-    if (f) run(f(arg)).then(() => run(READ_STATE)).then((s) => { if (s) { last = s; updateTitle(s); pop.webContents.send("dl:state", s); } });
+    if (name === "hide") { pop.hide(); return; }
+    run(name, ...args);
   });
 
-  // Play/pause from anywhere, even with the window hidden.
-  globalShortcut.register("CommandOrControl+Shift+Space", () => run(COMMANDS.toggle()));
-  app.on("will-quit", () => globalShortcut.unregisterAll());
+  globalShortcut.register("CommandOrControl+Shift+Space", () => run("toggle"));
+  app.on("will-quit", () => {
+    clearInterval(timer);
+    clearInterval(visibleTimer);
+    globalShortcut.unregisterAll();
+  });
 
-  return tray;
+  return { run };
 };

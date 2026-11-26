@@ -1,148 +1,276 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Dreamlight</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dreamlight Quick Remote</title>
 <style>
-  :root { --a: #34D399; --b: #60A5FA; --c: #F5D0A9; --text: #f4f6fc; --dim: rgba(244,246,252,.55); }
-  * { box-sizing: border-box; margin: 0; }
-  html, body { background: transparent; height: 100%; overflow: hidden; }
-  body { font: 13px/1.35 -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif; color: var(--text); -webkit-user-select: none; user-select: none; cursor: default; }
-  .card { position: absolute; inset: 0; border-radius: 16px; overflow: hidden; background: rgba(6,9,20,.86); border: 1px solid rgba(255,255,255,.09); box-shadow: inset 0 1px 0 rgba(255,255,255,.06); }
-  .hero { position: relative; height: 176px; overflow: hidden; }
-  .hero video, .hero .bgimg { position: absolute; inset: -30%; width: 160%; height: 160%; object-fit: cover; filter: blur(26px) saturate(1.4) brightness(.75); }
-  .hero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(6,9,20,0) 30%, rgba(6,9,20,.92)); }
-  .art { position: absolute; left: 16px; top: 16px; width: 104px; height: 104px; border-radius: 14px; overflow: hidden; z-index: 2; box-shadow: 0 10px 30px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.12); }
-  .art video, .art img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .meta { position: absolute; left: 134px; right: 14px; top: 22px; z-index: 2; }
-  .kicker { font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--a); font-weight: 600; display: flex; align-items: center; gap: 6px; }
-  .kicker i { width: 6px; height: 6px; border-radius: 50%; background: var(--a); box-shadow: 0 0 8px var(--a); display: inline-block; }
-  .paused .kicker i { box-shadow: none; opacity: .5; }
-  h1 { font-size: 19px; font-weight: 650; letter-spacing: -.01em; margin-top: 7px; line-height: 1.15; }
-  .sub { color: var(--dim); margin-top: 3px; font-size: 12px; }
-  .spec { position: absolute; left: 16px; right: 16px; bottom: 12px; height: 34px; z-index: 2; }
-  .body { padding: 8px 16px 14px; }
-  .prog { height: 4px; border-radius: 4px; background: rgba(255,255,255,.08); overflow: hidden; }
-  .prog b { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--b), var(--a)); border-radius: 4px; transition: width .9s linear; }
-  .times { display: flex; justify-content: space-between; color: var(--dim); font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; margin-top: 5px; }
-  .ctrls { display: flex; align-items: center; justify-content: center; gap: 22px; margin: 8px 0 12px; }
-  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
-  .ic { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; color: var(--text); opacity: .85; transition: .15s; }
-  .ic:hover { opacity: 1; background: rgba(255,255,255,.07); }
-  .play { width: 50px; height: 50px; border-radius: 50%; background: var(--text); color: #050711; display: grid; place-items: center; box-shadow: 0 0 0 0 var(--a); transition: transform .12s; }
-  .play:hover { transform: scale(1.05); }
-  .playing .play { box-shadow: 0 0 22px -4px var(--a); }
-  .label { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); margin: 6px 0 7px; display: flex; justify-content: space-between; }
-  .label span:last-child { letter-spacing: 0; text-transform: none; font: 11px ui-monospace, Menlo, monospace; color: var(--a); }
-  .chips { display: flex; gap: 6px; }
-  .chip { flex: 1; padding: 7px 0; border-radius: 9px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.07); font-size: 12px; text-align: center; color: var(--dim); transition: .15s; }
-  .chip:hover { color: var(--text); background: rgba(255,255,255,.09); }
-  .chip.on { color: #050711; background: var(--a); border-color: transparent; font-weight: 600; }
-  .bps { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-  .bp { display: flex; align-items: center; gap: 8px; padding: 6px; border-radius: 10px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.06); text-align: left; transition: .15s; }
-  .bp:hover { background: rgba(255,255,255,.08); }
-  .bp.on { border-color: var(--a); background: rgba(52,211,153,.10); }
-  .bp img { width: 28px; height: 28px; border-radius: 7px; flex: none; }
-  .bp b { display: block; font-size: 11.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .bp small { display: block; font-size: 10px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .foot { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.07); color: var(--dim); font-size: 11.5px; }
-  .foot button { color: var(--text); font-weight: 600; padding: 5px 10px; border-radius: 8px; background: rgba(255,255,255,.07); }
-  .foot button:hover { background: rgba(255,255,255,.13); }
-  .foot .more { padding: 5px 8px; margin-left: 4px; }
-  .upnext { color: var(--dim); font-size: 11px; text-align: center; margin: -4px 0 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  :root { color-scheme: dark; --ink: #f4f6fc; --muted: #aab7ca; --accent: #8db9ff; }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; height: 100%; }
+  body { font: 13px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: var(--ink); }
+  button, input { font: inherit; color: inherit; }
+  button { border: 0; background: none; cursor: pointer; }
+  button:disabled { opacity: .55; cursor: default; }
+  button:focus-visible, input:focus-visible { outline: 2px solid #b5e9ff; outline-offset: 3px; }
+  svg { width: 19px; height: 19px; fill: currentColor; }
+  .card { isolation: isolate; position: relative; display: flex; flex-direction: column; height: 100%; border-radius: 16px; overflow: hidden; border: 1px solid #ffffff2c; background: #0d1420f8; }
+  .hero { isolation: isolate; position: relative; padding: 16px 15px 13px; overflow: hidden; flex: none; }
+  .backdrop { position: absolute; inset: -35%; z-index: -2; width: 170%; height: 170%; object-fit: cover; filter: blur(25px); opacity: .38; }
+  .hero::after { content: ""; position: absolute; z-index: -1; inset: 0; background: linear-gradient(180deg, #10192967, #101929d9 74%, #0d1420); }
+  .brand { display: flex; justify-content: space-between; align-items: center; color: var(--muted); margin-bottom: 10px; }
+  .brand b { color: var(--ink); font: 400 21px/1 "Iowan Old Style", Georgia, serif; letter-spacing: -.05em; }
+  .brand button { color: var(--muted); letter-spacing: 2px; padding: 4px 5px; }
+  .current { display: flex; align-items: center; gap: 11px; }
+  .art { position: relative; overflow: hidden; width: 52px; height: 52px; flex: none; border-radius: 9px; border: 1px solid #ffffff32; background: radial-gradient(ellipse at 76% 22%, color-mix(in srgb, var(--accent) 38%, #151b29), #151b29 72%); }
+  .art img, .art video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .art video { opacity: 0; transition: opacity 160ms ease; }
+  .art.decoded video { opacity: 1; }
+  h1, p { margin: 0; }
+  h1 { font-size: 18px; line-height: 1.15; letter-spacing: -.03em; }
+  .sub { color: var(--muted); margin-top: 4px; }
+  .content { flex: 1; min-height: 0; overflow: auto; padding: 0 15px 10px; scrollbar-width: thin; }
+  .clock { display: flex; justify-content: space-between; align-items: center; min-height: 28px; }
+  .clock strong { color: var(--ink); font: 600 15px/1.4 ui-monospace, Menlo, monospace; }
+  .clock span { color: var(--muted); font-size: 12px; }
+  .prog { height: 3px; margin-top: 5px; background: #ffffff1f; border-radius: 3px; overflow: hidden; }
+  .prog b { background: var(--accent); display: block; height: 100%; width: 0; }
+  .controls { display: flex; justify-content: center; align-items: center; gap: 7px; margin: 13px 0 8px; }
+  .icon { width: 36px; height: 38px; padding: 0; display: grid; place-items: center; color: var(--ink); border-radius: 50%; }
+  .icon:hover { background: #ffffff17; }
+  .play { width: 44px; height: 44px; margin-inline: 2px; background: #e5efff; color: #091523; }
+  .play:hover { background: white; }
+  .pill { padding: 6px 10px; min-height: 33px; border-radius: 15px; border: 1px solid #ffffff31; background: #162235; color: var(--ink); }
+  .pill:hover, .pill[aria-pressed="true"] { background: #263851; border-color: var(--accent); }
+  .upnext, .status { color: var(--muted); min-height: 19px; }
+  .status { display: flex; align-items: center; gap: 6px; }
+  .status .pill { margin-left: auto; }
+  .start { text-align: left; display: flex; justify-content: space-between; align-items: center; width: 100%; border: 1px solid #ffffff32; background: #162235; border-radius: 9px; padding: 9px 10px; margin-top: 10px; }
+  .start:hover { border-color: var(--accent); }
+  .start span { color: var(--accent); font-size: 15px; }
+  .modes, .presets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-top: 8px; }
+  .modes { grid-template-columns: repeat(2, 1fr); }
+  .activity { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 5px; text-align: left; margin-top: 5px; }
+  .activity span { color: var(--muted); }
+  .timer-types, form { display: flex; gap: 5px; margin: 9px 0; }
+  .custom { flex: 1; min-width: 0; border: 1px solid #ffffff34; background: #121a29; border-radius: 7px; padding: 5px 8px; }
+  .foot { border-top: 1px solid #ffffff24; padding: 7px 15px 8px; flex: none; background: #101824; }
+  .open { width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 4px 0; color: var(--muted); }
+  .open:hover { color: var(--ink); }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0s !important; } }
 </style>
 </head>
 <body>
-<div class="card paused" id="card">
-  <div class="hero">
-    <video id="bgv" muted loop playsinline autoplay></video><img class="bgimg" id="bgi" alt="">
-    <div class="art"><video id="artv" muted loop playsinline autoplay></video><img id="arti" alt=""></div>
-    <div class="meta">
-      <div class="kicker"><i></i><span id="band">Dreamlight</span></div>
-      <h1 id="title">Dreamlight</h1>
-      <div class="sub" id="sub"></div>
+<div class="card">
+  <header class="hero">
+    <img class="backdrop" id="backdrop" alt="" hidden>
+    <div class="brand"><b>Dreamlight</b><button data-cmd="menu" aria-label="More Dreamlight options">•••</button></div>
+    <div class="current">
+      <div class="art" id="art"><img alt="" id="poster" hidden><video id="loop" preload="none" muted loop playsinline></video></div>
+      <div><h1 id="activity">Choose an activity</h1><p class="sub" id="track"></p></div>
     </div>
-    <canvas class="spec" id="spec"></canvas>
+  </header>
+  <div class="content" id="content">
+    <div class="clock"><strong id="time">Continuous</strong><span id="phase"></span></div>
+    <div class="prog" aria-hidden="true"><b id="progress"></b></div>
+    <div class="controls">
+      <button class="icon" data-cmd="prev" aria-label="Previous track"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
+      <button class="icon play" data-cmd="toggle" aria-label="Play"><svg viewBox="0 0 24 24"><path id="playIcon" d="M8 5v14l11-7z"/></svg></button>
+      <button class="icon" data-cmd="next" aria-label="Next track"><svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg></button>
+      <button class="pill" id="stop" data-cmd="stop" hidden>Stop</button>
+      <button class="pill" id="timer" aria-expanded="false" aria-controls="timerPanel">Continuous</button>
+    </div>
+    <p class="upnext" id="next"></p>
+    <div class="status" id="status" hidden><span id="message" role="status"></span><button class="pill" data-cmd="retry" id="retry" hidden>Retry</button></div>
+    <section id="timerPanel" aria-label="Session timer" hidden>
+      <div class="timer-types"><button class="pill" data-min="0">Continuous</button><button class="pill" id="intervals">Intervals 25 / 5</button></div>
+      <div class="presets" id="presets"></div>
+      <form id="custom"><input class="custom" type="number" aria-label="Custom minutes" placeholder="Custom minutes" min="0.01" max="1440" step="any" required><button class="pill" type="submit">Set timer</button></form>
+    </section>
+    <button type="button" class="start" id="start" aria-expanded="false" aria-controls="activityPanel">Start an activity <span aria-hidden="true">↘</span></button>
+    <section id="activityPanel" aria-label="Choose an activity" hidden><div class="modes" id="modes"></div><div id="activities"></div></section>
   </div>
-  <div class="body">
-    <div class="prog"><b id="bar"></b></div>
-    <div class="times"><span id="cur">0:00</span><span id="dur">1:00:00</span></div>
-    <div class="ctrls">
-      <button class="ic" data-cmd="prev" title="Previous"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
-      <button class="play" data-cmd="toggle" title="Play or pause (⌘⇧Space)"><svg id="pi" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
-      <button class="ic" data-cmd="next" title="Next"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg></button>
-    </div>
-    <div class="upnext" id="upnext"></div>
-    <div class="label"><span>Focus timer</span><span id="remain"></span></div>
-    <div class="chips" id="timers">
-      <button class="chip" data-min="25">25m</button><button class="chip" data-min="45">45m</button>
-      <button class="chip" data-min="60">60m</button><button class="chip" data-min="90">90m</button><button class="chip" data-min="0">∞</button>
-    </div>
-    <div class="label" style="margin-top:12px"><span>Blueprints</span><span></span></div>
-    <div class="bps" id="bps"></div>
-    <div class="foot"><span id="today">0m focused today</span><span><button data-cmd="open">Open Dreamlight</button><button class="more" data-cmd="menu" title="More">⋯</button></span></div>
-  </div>
+  <footer class="foot"><button class="open" data-cmd="open">Open Dreamlight <span aria-hidden="true">↗</span></button></footer>
 </div>
 <script>
-  const base = new URLSearchParams(location.search).get("base") || "";
+  const base = new URLSearchParams(location.search).get("base");
   const $ = (id) => document.getElementById(id);
-  const fmt = (s) => { s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; return h ? `${h}:${String(m).padStart(2, "0")}:${String(x).padStart(2, "0")}` : `${m}:${String(x).padStart(2, "0")}`; };
-  const abs = (p) => p ? base + "/" + String(p).replace(/^\/+/, "") : "";
-  let cur = {}, spec = null, bpKey = "";
+  const remote = window.dl;
+  const video = $("loop");
+  const motionPreference = matchMedia("(prefers-reduced-motion: reduce)");
+  let player = {}, visible = false, mode = "", assets = "", choices = false;
+  const broken = new Set();
+  const absolute = (url) => url ? new URL(url, base + "/").href : "";
+  const fmt = (seconds) => {
+    const s = Math.max(0, Math.ceil(seconds));
+    const h = Math.floor(s / 3600), m = String(Math.floor(s / 60) % 60).padStart(2, "0");
+    return `${h ? h + ":" : ""}${m}:${String(s % 60).padStart(2, "0")}`;
+  };
 
-  document.addEventListener("click", (e) => {
-    const c = e.target.closest("[data-cmd]"); if (c) return window.dl.cmd(c.dataset.cmd);
-    const t = e.target.closest("[data-min]"); if (t) return window.dl.cmd("timer", t.dataset.min);
-    const b = e.target.closest("[data-stack]"); if (b) return window.dl.cmd("stack", b.dataset.stack);
-  });
-  document.addEventListener("keydown", (e) => { if (e.code === "Space") { e.preventDefault(); window.dl.cmd("toggle"); } });
-
-  function setMedia(video, img, loop, still) {
-    if (loop) { if (video.dataset.src !== loop) { video.dataset.src = loop; video.src = loop; video.play().catch(() => {}); } video.style.display = ""; img.style.display = "none"; }
-    else { video.removeAttribute("src"); video.dataset.src = ""; video.style.display = "none"; img.src = still; img.style.display = ""; }
+  function setExpanded(control, panel, on) {
+    $(control).setAttribute("aria-expanded", String(on));
+    $(panel).hidden = !on;
+    if (!on) $("content").scrollTop = 0;
   }
 
-  window.dl.onState((s) => {
-    if (!s || !s.ok) return;
-    const trackChanged = s.title !== cur.title; cur = s;
-    const [a, b, c] = s.palette.length ? s.palette : ["#34D399", "#60A5FA", "#F5D0A9"];
-    document.documentElement.style.setProperty("--a", a); document.documentElement.style.setProperty("--b", b); document.documentElement.style.setProperty("--c", c || a);
-    $("card").classList.toggle("paused", !s.playing); $("card").classList.toggle("playing", s.playing);
-    $("pi").innerHTML = s.playing ? '<path d="M7 5h4v14H7zM13 5h4v14h-4z"/>' : '<path d="M8 5v14l11-7z"/>';
-    $("band").textContent = `${s.band} · ${s.bpm} BPM`; $("title").textContent = s.title; $("sub").textContent = `${s.subtitle} · ${s.key}`;
-    if (trackChanged) { setMedia($("artv"), $("arti"), abs(s.coverLoop), abs(s.cover)); setMedia($("bgv"), $("bgi"), abs(s.coverLoop), abs(s.cover)); }
-    $("bar").style.width = `${Math.min(100, s.cur / s.dur * 100)}%`; $("cur").textContent = fmt(s.cur); $("dur").textContent = fmt(s.dur);
-    $("upnext").textContent = s.upNext ? `Up next · ${s.upNext}` : "";
-    const tm = Math.round(s.timerTotal / 60);
-    document.querySelectorAll("#timers .chip").forEach((el) => el.classList.toggle("on", +el.dataset.min === tm));
-    $("remain").textContent = s.timerTotal ? `${fmt(s.timerRemain)} left` : "";
-    const m = Math.floor(s.focusToday / 60); $("today").textContent = `${m >= 60 ? Math.floor(m / 60) + "h " + (m % 60) + "m" : m + "m"} focused today`;
-    const key = s.blueprints.map((x) => x.key).join() + s.stack;
-    if (key !== bpKey) {
-      bpKey = key;
-      $("bps").innerHTML = s.blueprints.map((x) => `<button class="bp${x.key === s.stack ? " on" : ""}" data-stack="${x.key}"><img src="${abs(x.cover)}" alt=""><span><b>${x.name}</b><small>${x.meta}</small></span></button>`).join("");
+  function syncMotion() {
+    const loop = absolute(player.loop);
+    if (!visible || player.reducedMotion || motionPreference.matches || !loop || broken.has(loop)) {
+      video.pause();
+      $("art").classList.remove("decoded");
+      return;
+    }
+    if (video.getAttribute("src") !== loop) {
+      $("art").classList.remove("decoded");
+      video.src = loop;
+    }
+    if (video.paused) video.play().catch(() => {});
+  }
+
+  function updateArt() {
+    const key = `${player.poster}|${player.loop}|${player.hue}`;
+    if (key === assets) return;
+    assets = key;
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
+    video.removeAttribute("poster");
+    $("art").classList.remove("decoded");
+    const poster = absolute(player.poster);
+    [$("poster"), $("backdrop")].forEach((image) => {
+      image.hidden = !poster;
+      image.onerror = () => { image.hidden = true; image.removeAttribute("src"); };
+      if (poster) image.src = poster;
+      else image.removeAttribute("src");
+    });
+    if (poster) video.poster = poster;
+    document.documentElement.style.setProperty("--accent", player.hue || "#8db9ff");
+  }
+
+  function showVideo() {
+    if (!visible || video.paused || player.reducedMotion || motionPreference.matches) return;
+    $("art").classList.add("decoded");
+  }
+  video.addEventListener("playing", () => {
+    if (video.requestVideoFrameCallback) video.requestVideoFrameCallback(showVideo);
+    else showVideo();
+  });
+  video.addEventListener("error", () => {
+    if (video.getAttribute("src")) broken.add(video.getAttribute("src"));
+    $("art").classList.remove("decoded");
+  });
+  motionPreference.addEventListener("change", syncMotion);
+
+  function buildChoices() {
+    if (choices || !player.ready) return;
+    choices = true;
+    $("modes").replaceChildren(...player.modes.map((item) => {
+      const button = document.createElement("button");
+      button.className = "pill";
+      button.textContent = item.name;
+      button.dataset.mode = item.key;
+      button.setAttribute("aria-pressed", "false");
+      return button;
+    }));
+    $("presets").replaceChildren(...player.presets.map((minutes) => {
+      const button = document.createElement("button");
+      button.className = "pill";
+      button.dataset.min = minutes;
+      button.textContent = `${minutes} min`;
+      return button;
+    }));
+  }
+
+  function chooseMode(key) {
+    mode = key;
+    $("modes").querySelectorAll("button").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.mode === key)));
+    $("activities").replaceChildren(...player.activities.filter((item) => item.mode === mode).map((item) => {
+      const button = document.createElement("button");
+      button.className = "pill activity";
+      button.dataset.activity = item.key;
+      button.innerHTML = `${item.name} <span>${item.minutes ? item.minutes + " min" : "Continuous"}</span>`;
+      return button;
+    }));
+    $("start").scrollIntoView({ block: "start" });
+  }
+
+  function applyTimer(minutes, intervals = false) {
+    remote.cmd("setTimer", minutes, intervals);
+    setExpanded("timer", "timerPanel", false);
+    $("timer").focus();
+  }
+  $("start").addEventListener("click", () => {
+    setExpanded("timer", "timerPanel", false);
+    const opening = $("activityPanel").hidden;
+    setExpanded("start", "activityPanel", opening);
+    if (opening) $("start").scrollIntoView({ block: "start" });
+  });
+  $("timer").addEventListener("click", () => {
+    setExpanded("start", "activityPanel", false);
+    const opening = $("timerPanel").hidden;
+    setExpanded("timer", "timerPanel", opening);
+    if (opening) $("timerPanel").scrollIntoView({ block: "start" });
+  });
+  $("custom").addEventListener("submit", (event) => {
+    event.preventDefault();
+    applyTimer($("custom").querySelector("input").valueAsNumber);
+  });
+  $("intervals").addEventListener("click", () => applyTimer(25, true));
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest("button");
+    if (!button) return;
+    if (button.dataset.cmd) remote.cmd(button.dataset.cmd);
+    if (button.dataset.min != null) applyTimer(Number(button.dataset.min));
+    if (button.dataset.mode) chooseMode(button.dataset.mode);
+    if (button.dataset.activity) {
+      remote.cmd("startActivity", button.dataset.activity);
+      setExpanded("start", "activityPanel", false);
+      $("start").focus();
     }
   });
-  window.dl.onSpectrum((s) => { spec = s; });
-
-  const cv = $("spec"), cx = cv.getContext("2d"); let smooth = new Array(28).fill(0);
-  function draw(t) {
-    const dpr = devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
-    if (cv.width !== w * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
-    cx.setTransform(dpr, 0, 0, dpr, 0, 0); cx.clearRect(0, 0, w, h);
-    const n = smooth.length, gap = 3, bw = (w - gap * (n - 1)) / n;
-    const st = getComputedStyle(document.documentElement), ca = st.getPropertyValue("--a").trim(), cb = st.getPropertyValue("--b").trim();
-    const g = cx.createLinearGradient(0, 0, w, 0); g.addColorStop(0, cb); g.addColorStop(1, ca); cx.fillStyle = g;
-    for (let i = 0; i < n; i++) {
-      const target = spec ? spec[i] || 0 : (cur.playing ? 0 : 0.06 + 0.04 * Math.sin(t / 900 + i * 0.5));
-      smooth[i] += (target - smooth[i]) * 0.25;
-      const bh = Math.max(2, smooth[i] * h);
-      cx.globalAlpha = 0.55 + 0.45 * smooth[i];
-      cx.beginPath(); cx.roundRect(i * (bw + gap), h - bh, bw, bh, 2); cx.fill();
+  document.addEventListener("keydown", (event) => {
+    if (event.code === "Space" && event.target === document.body) {
+      event.preventDefault();
+      remote.cmd("toggle");
     }
-    requestAnimationFrame(draw);
-  }
-  requestAnimationFrame(draw);
+    if (event.key !== "Escape") return;
+    if (!$("timerPanel").hidden) { setExpanded("timer", "timerPanel", false); $("timer").focus(); }
+    else if (!$("activityPanel").hidden) { setExpanded("start", "activityPanel", false); $("start").focus(); }
+    else remote.cmd("hide");
+  });
+
+  remote.onVisibility((on) => {
+    visible = on;
+    syncMotion();
+  });
+  remote.onState((state) => {
+    player = state;
+    buildChoices();
+    updateArt();
+    syncMotion();
+    $("activity").textContent = state.title ? state.name : "Choose an activity";
+    $("track").textContent = state.title;
+    const playing = state.playing || (state.intervalPhase === "break" && state.timerRunning);
+    $("playIcon").setAttribute("d", playing || state.starting ? "M7 5h4v14H7zM13 5h4v14h-4z" : "M8 5v14l11-7z");
+    document.querySelector(".play").setAttribute("aria-label", playing ? "Pause" : state.starting ? "Cancel start" : "Play");
+    document.querySelectorAll('[data-cmd="prev"], [data-cmd="next"]').forEach((button) => { button.disabled = !state.title; });
+    $("time").textContent = state.timerTotal ? fmt(state.timerRemain) : "Continuous";
+    $("phase").textContent = state.intervalPhase ? `${state.intervalPhase === "work" ? "Focus" : "Break"} · round ${state.intervalRound}` : state.timerTotal ? "remaining" : "";
+    $("timer").textContent = state.timerKind;
+    $("timer").setAttribute("aria-label", `Session timer: ${state.timerKind}`);
+    $("stop").hidden = state.activity !== "deep_sleep";
+    $("progress").style.width = `${state.dur ? Math.min(100, state.cur / state.dur * 100) : 0}%`;
+    $("next").textContent = state.upNext ? `Up next · ${state.upNext}` : "";
+    const status = state.error || (state.starting ? "Starting…" : state.completed ? "Session complete" : "");
+    if ($("message").textContent !== status) $("message").textContent = status;
+    $("status").hidden = !status;
+    $("retry").hidden = !state.error;
+    $("timerPanel").querySelectorAll("[data-min]").forEach((button) => {
+      button.setAttribute("aria-pressed", String(state.timerKind !== "Intervals" && state.timerTotal === Number(button.dataset.min) * 60));
+    });
+    $("intervals").setAttribute("aria-pressed", String(state.timerKind === "Intervals"));
+  });
 </script>
 </body>
 </html>
