@@ -308,7 +308,8 @@ async function playSelection(selection) {
   decks[to].requestId = requestId;
   startAttempt = attempt;
   state.failure = null;
-  ensureAudioGraph(Boolean(activity?.gentleEnd || preferredTimer(activity).intervals));
+  const preset = session === undefined ? state.timer : preferredTimer(activity || null);
+  ensureAudioGraph(Boolean(activity?.gentleEnd || (selection.minutes == null && preset?.intervals)));
   if (!decks[to].gain && to !== from) decks[from].el.pause();
   state.completedUntil = 0;
   state.starting = false;
@@ -345,7 +346,7 @@ async function playSelection(selection) {
       state.sessionName = session;
       if (activity) state.lastActivity = activity.key;
       setBreath(Boolean(activity?.breath));
-      installTimer(selection.minutes == null ? preferredTimer(activity) : { minutes: selection.minutes });
+      installTimer(selection.minutes == null ? preferredTimer(state.activity) : { minutes: selection.minutes });
     } else {
       resumeTimer();
       if (restoreBreak) {
@@ -540,7 +541,7 @@ if (navigator.mediaSession) {
 
 // A deadline represents a running clock. A paused clock stores its remaining milliseconds.
 function preferredTimer(activity = state.activity) {
-  return state.timerPresets[activity?.key || "library"] || { minutes: activity?.minutes || 0, intervals: false };
+  return state.timerPresets[activity?.key || "library"] || { minutes: activity?.minutes || 0, intervals: Boolean(activity?.intervals) };
 }
 
 function setTimer(minutes, intervals = false) {
