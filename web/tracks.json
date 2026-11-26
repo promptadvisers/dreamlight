@@ -16,7 +16,7 @@
       "binauralR": 203.25,
       "bpm": 108.75,
       "key": "E♭ Lydian",
-      "description": "1-of-1 bespoke composition tuned to balanced dopamine endurance with a custom 60-step melodic motif.",
+      "description": "A custom 60-step melodic motif with warm synth layers for a deep-work session.",
       "palette": [
         "#34D399",
         "#60A5FA",
@@ -59,7 +59,7 @@
       "binauralR": null,
       "bpm": 120,
       "key": "C minor 9",
-      "description": "Warm pillowy 120 BPM pulse, detuned analog pads, and post-reverb 16 Hz beta neural phase-locking.",
+      "description": "A soft 120 BPM pulse, detuned analog pads, and 16 Hz amplitude modulation for deep work.",
       "palette": [
         "#60A5FA",
         "#A78BFA",
@@ -91,7 +91,7 @@
       "filename": "01_neon_synapse_gamma_40hz_1hr.mp3",
       "cover": "covers/neon_synapse.png",
       "title": "Neon Synapse",
-      "subtitle": "Hyper-Clarity & Coding",
+      "subtitle": "FM Plucks for Coding",
       "category": "focus",
       "mood": "deep work",
       "band": "40 Hz Gamma",
@@ -101,7 +101,7 @@
       "binauralR": 260.0,
       "bpm": 120,
       "key": "D minor 9",
-      "description": "Crystalline FM plucks, crisp pulse, and harmonic 40 Hz gamma binaural split for sharp analytical focus.",
+      "description": "Crystalline FM plucks, a crisp pulse, and a 40 Hz binaural difference for coding or analytical work.",
       "palette": [
         "#22D3EE",
         "#818CF8",
@@ -184,7 +184,7 @@
       "binauralR": 238.0,
       "bpm": 108,
       "key": "A Lydian",
-      "description": "Shimmering glass celesta motifs, luminous choir-voiced pads, and 36 Hz gamma insight entrainment.",
+      "description": "Glass celesta motifs, choir-like pads, and a 36 Hz binaural difference for creative work.",
       "palette": [
         "#E879F9",
         "#38BDF8",
@@ -225,7 +225,7 @@
       "binauralR": 232.0,
       "bpm": 120,
       "key": "E minor 9",
-      "description": "High-drive rolling 16th-note analog bassline, tight four-on-the-floor pulse, and 24 Hz high-beta ignition.",
+      "description": "Rolling sixteenth-note analog bass, four-on-the-floor percussion, and a 24 Hz binaural difference.",
       "palette": [
         "#F97316",
         "#EF4444",
@@ -266,7 +266,7 @@
       "binauralR": 206.0,
       "bpm": 120,
       "key": "G major 9",
-      "description": "Sunlit progressive synth pads, ascending harmonic plucks, and buoyant 20 Hz high-beta morning lift.",
+      "description": "Bright progressive synth pads, ascending plucks, and a 20 Hz binaural difference for a morning session.",
       "palette": [
         "#34D399",
         "#FBBF24",
@@ -349,7 +349,7 @@
       "binauralR": 183.11,
       "bpm": 127.5,
       "key": "C♯ minor 9",
-      "description": "Hypnotic minimal off-beat bass groove, wooden kalimba-synth pulses, and crisp 17 Hz mid-beta execution.",
+      "description": "A minimal offbeat bass groove, kalimba-like synth pulses, and a 17 Hz binaural difference.",
       "palette": [
         "#06B6D4",
         "#A855F7",
@@ -390,7 +390,7 @@
       "binauralR": 192.5,
       "bpm": 112.5,
       "key": "F# minor 9",
-      "description": "Grounded dark sub-bass groove, resonant Juno pads, and tight 15 Hz beta entrainment locked to tempo.",
+      "description": "Dark sub-bass, resonant Juno-style pads, and a 15 Hz binaural difference for deep work.",
       "palette": [
         "#6366F1",
         "#C084FC",
@@ -474,7 +474,7 @@
       "binauralR": 171.55,
       "bpm": 101.25,
       "key": "B minor 9",
-      "description": "Muted upright felt-piano voicings, gentle acoustic bass pulse, and intimate wood-room 13.5 Hz focus.",
+      "description": "Muted felt piano and a gentle acoustic bass pulse for reading, with a 13.5 Hz binaural difference.",
       "palette": [
         "#D97706",
         "#92400E",
@@ -515,7 +515,7 @@
       "binauralR": 153.33,
       "bpm": 97.5,
       "key": "D major 9",
-      "description": "Sun-drenched vintage Rhodes, brushed acoustic groove without rain, and smooth 13 Hz SMR poise.",
+      "description": "Vintage Rhodes and a brushed acoustic groove without rain, with a 13 Hz binaural difference.",
       "palette": [
         "#F59E0B",
         "#14B8A6",
@@ -556,7 +556,7 @@
       "binauralR": 170.8,
       "bpm": 120,
       "key": "E major 9",
-      "description": "Sunlit Rhodes harmonies and gentle 12 Hz sensorimotor rhythm for relaxed, jitter-free concentration.",
+      "description": "Warm Rhodes harmonies with a gentle groove and a 12 Hz binaural difference for reading or light work.",
       "palette": [
         "#F59E0B",
         "#FB923C",
@@ -598,7 +598,7 @@
       "binauralR": 190.5,
       "bpm": 110,
       "key": "A major 9",
-      "description": "Resonant thumb-piano kalimba patterns over garden breeze and airy 11 Hz high-alpha openness.",
+      "description": "Resonant kalimba patterns, a garden breeze, and an 11 Hz binaural difference for creative work.",
       "palette": [
         "#84CC16",
         "#10B981",
@@ -764,7 +764,7 @@
       "binauralR": 159.3,
       "bpm": 75,
       "key": "A♭ major 9",
-      "description": "Dreamy twilight vibraphone notes, gentle lagoon surf swells, and Schumann-adjacent 7.5 Hz theta drift.",
+      "description": "Soft vibraphone notes and swelling lagoon surf with a 7.5 Hz binaural difference.",
       "palette": [
         "#F472B6",
         "#818CF8",
@@ -805,7 +805,7 @@
       "binauralR": 149.83,
       "bpm": 72,
       "key": "G minor 11",
-      "description": "Beatless nocturnal ocean surf swells, sparse crystal chimes, and soothing 6 Hz theta singing-bowl drone.",
+      "description": "Beatless ocean surf, sparse crystal chimes, and a singing-bowl drone with a 6 Hz binaural difference.",
       "palette": [
         "#38BDF8",
         "#34D399",
@@ -847,7 +847,7 @@
       "binauralR": 138.83,
       "bpm": 66,
       "key": "C♯ minor 11",
-      "description": "Beatless resonant Tibetan singing bowls, warm tanpura-inspired drone, and 5.5 Hz theta stillness.",
+      "description": "Resonant singing bowls and a tanpura-inspired drone with a 5.5 Hz binaural difference.",
       "palette": [
         "#F59E0B",
         "#EC4899",
@@ -888,7 +888,7 @@
       "binauralR": 133.06,
       "bpm": 67.5,
       "key": "F Lydian",
-      "description": "Weightless beatless cloud pads, feather-soft harp droplets, and 4.5 Hz twilight power-nap descent.",
+      "description": "Soft pads and sparse harp notes for a nap, with a 4.5 Hz binaural difference and no percussion.",
       "palette": [
         "#93C5FD",
         "#C4B5FD",
@@ -919,7 +919,7 @@
       "filename": "09_abyssal_drift_delta_3hz_1hr.mp3",
       "cover": "covers/abyssal_drift.png",
       "title": "Abyssal Drift",
-      "subtitle": "Deep Sleep & Restoration",
+      "subtitle": "Low Drones for Sleep",
       "category": "reset",
       "mood": "sleep",
       "band": "3 Hz Delta",
@@ -1002,7 +1002,7 @@
       "filename": "24_deep_trench_delta_1_5hz_1hr.mp3",
       "cover": "covers/deep_trench.png",
       "title": "Deep Trench",
-      "subtitle": "Dreamless Delta Restoration",
+      "subtitle": "Organ Drones for Sleep",
       "category": "reset",
       "mood": "sleep",
       "band": "1.5 Hz Delta",

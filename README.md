@@ -1,19 +1,24 @@
 # Dreamlight — Neural Focus Studio
 
-Dreamlight is an open, portable, zero-lock-in functional focus-music studio built with plain Python (`numpy` + `Pillow` + `ffmpeg`) audio synthesis and a single dependency-free static HTML player.
+Dreamlight is an open, portable, zero-lock-in functional focus-music studio built with plain Python (`numpy` + `Pillow` + `ffmpeg`) audio synthesis and a dependency-free static player with 14 activities across Focus, Relax, Sleep, and Meditate.
 
 It runs anywhere:
 - **Static website** (`web/` served by `python3 -m http.server`, Vercel, Cloudflare Pages, Netlify, or GitHub Pages)
-- **Offline desktop app** (`desktop/`, a tiny Electron wrapper loading `web/` directly from disk with zero accounts and zero network requests)
-- **Single-file artifact** (`web/index.html` requires no build step, bundler, or framework)
+- **Offline desktop app** (`desktop/`, an Electron wrapper serving `web/` from disk over loopback with no account or external network connection)
+
+Serve the `web/` directory as-is. The player requires no build step, bundler, or framework.
 
 ## Repository Layout
 
 ```text
 dreamlight/
 ├── web/                        # Static player (no build step)
-│   ├── index.html              # Complete dependency-free player & per-track visual engine
+│   ├── index.html              # Player markup and controls
 │   ├── tracks.json             # Generated from generators/catalog.py (25 sessions)
+│   ├── playback.js             # Two-deck audio, mixer, and session timing
+│   ├── visualizer.js           # Per-track Signature and other Signal styles
+│   ├── motion/                 # Mode and activity art
+│   ├── motion-index.json       # Optional media inventory for static hosts
 │   ├── manifest.json           # PWA manifest
 │   ├── covers/                 # 512x512 studio cover PNGs
 │   │   └── loops/              # Optional silent square MP4 cover loops (<slug>.mp4)
@@ -55,6 +60,12 @@ python3 server.py 8787
 ```
 
 Then open `http://localhost:8787`.
+
+The included server and Electron read optional motion files directly from disk. To include newly added posters and loops on a plain static host, refresh the bundled inventory while the included server is running.
+
+```bash
+curl --fail http://127.0.0.1:8787/motion-index.json -o web/motion-index.json
+```
 
 ### 2. Run the Offline Desktop App (Electron)
 
