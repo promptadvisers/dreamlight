@@ -2,31 +2,37 @@ const $ = (id) => document.getElementById(id);
 const motionPreference = matchMedia("(prefers-reduced-motion: reduce)");
 let prefersReducedMotion = motionPreference.matches;
 
-// The inventory avoids failed media requests for optional files. Local servers read it
-// from disk at request time. Static hosts serve the checked-in snapshot.
-const motionFiles = new Set();
-const loadMotionInventory = fetch("motion-index.json").then((response) => response.json())
-  .then((files) => files.forEach((path) => motionFiles.add(path))).catch(() => {});
-const artForMode = (key) => ({ stem: `motion/modes/${key}`, hue: MODE_BY_KEY.get(key)?.hue });
-const artForActivity = (activity) => ({ stem: `motion/activities/${activity.key}`, hue: MODE_BY_KEY.get(activity.mode)?.hue });
-const artForTrack = (track) => ({ poster: track?.cover, loop: track?.coverLoop || (track ? `covers/loops/${track.slug}.mp4` : ""), hue: track?.palette?.[0] });
-const availableArt = (art = {}) => ({
-  poster: art.poster || (motionFiles.has(art.stem + ".jpg") ? art.stem + ".jpg" : ""),
-  loop: motionFiles.has(art.loop || art.stem + ".mp4") ? (art.loop || art.stem + ".mp4") : "",
-  hue: art.hue || "#8DB9FF",
-});
+const motionManifest = {};
+const loadMotionManifest = fetch("motion/manifest.json").then((response) => response.ok ? response.json() : {})
+  .then((data) => { Object.assign(motionManifest, data); }).catch(() => {});
+
+function sceneArt(group, key, mode) {
+  const inventory = motionManifest[group];
+  const stem = `motion/${group}/${key}`;
+  return {
+    poster: inventory?.posters?.includes(key) ? stem + ".jpg" : "",
+    loop: inventory?.loops?.includes(key) ? stem + ".mp4" : "",
+    hue: mode?.hue,
+    focal: group === "modes" ? mode?.focal : undefined,
+  };
+}
+
+const artForMode = (key) => sceneArt("modes", key, MODE_BY_KEY.get(key));
+const artForActivity = (activity) => sceneArt("activities", activity.key, MODE_BY_KEY.get(activity.mode));
+const artForTrack = (track) => ({ poster: track?.cover, loop: track?.coverLoop, hue: track?.palette?.[0] });
+const availableArt = ({ poster = "", loop = "", hue = "#38E8C6", focal = "center" } = {}) => ({ poster, loop, hue, focal });
 
 const motion = (() => {
   const slots = new WeakMap();
   const broken = new Set();
   const running = new Map();
-  let stage = null, hovered = null, focused = null, suspended = false;
+  let stage = null, hovered = null, focused = null, suspended = false, exclusive = false;
   const viewport = new IntersectionObserver(sync);
 
   function setArt(slot, art) {
-    const { poster, loop, hue } = availableArt(art);
+    const { poster, loop, hue, focal } = availableArt(art);
     const previous = slots.get(slot);
-    if (previous?.poster === poster && previous.loop === loop && previous.hue === hue) return;
+    if (previous?.poster === poster && previous.loop === loop && previous.hue === hue && previous.focal === focal) return;
     stop(slot, true);
     const img = slot.querySelector("img");
     img.onerror = () => { img.removeAttribute("src"); img.hidden = true; };
@@ -34,7 +40,9 @@ const motion = (() => {
     if (poster) img.src = poster;
     else img.removeAttribute("src");
     slot.style.setProperty("--art-hue", hue);
-    slots.set(slot, { poster, loop, hue });
+    slot.style.setProperty("--art-focal", focal);
+    slot.classList.toggle("still-art", Boolean(poster && !loop));
+    slots.set(slot, { poster, loop, hue, focal });
   }
 
   function stop(slot, unload = false) {
@@ -64,7 +72,13 @@ const motion = (() => {
           if (running.get(slot) === video && !video.paused) slot.classList.add("decoded");
         };
         if (video.requestVideoFrameCallback) video.requestVideoFrameCallback(show);
-        else show();
+        else {
+          video.addEventListener("timeupdate", function reveal() {
+            if (video.currentTime <= 0) return;
+            video.removeEventListener("timeupdate", reveal);
+            show();
+          });
+        }
       });
       slot.append(video);
       video.src = art.loop;
@@ -82,16 +96,23 @@ const motion = (() => {
   }
 
   function sync() {
-    const preview = hovered || focused;
+    const preview = exclusive ? null : hovered || focused;
     const candidates = document.hidden || suspended || prefersReducedMotion ? [] : [stage, preview].filter(isVisible);
     for (const slot of running.keys()) if (!candidates.includes(slot)) stop(slot);
     candidates.forEach(start);
   }
 
-  function selectStage(slot) {
-    if (stage) viewport.unobserve(stage);
-    stage = slot;
-    if (stage) viewport.observe(stage);
+  function selectStage(slot, single = false) {
+    if (stage !== slot) {
+      stage?.classList.remove("stage-art");
+      if (stage && stage !== hovered && stage !== focused) viewport.unobserve(stage);
+      stage = slot;
+      if (stage) {
+        stage.classList.add("stage-art");
+        viewport.observe(stage);
+      }
+    }
+    exclusive = single;
     sync();
   }
 
@@ -100,7 +121,7 @@ const motion = (() => {
       if (kind === "pointer") hovered = on ? slot : hovered === slot ? null : hovered;
       else focused = on ? slot : focused === slot ? null : focused;
       if (on) viewport.observe(slot);
-      if (!on && slot !== hovered && slot !== focused) viewport.unobserve(slot);
+      if (!on && slot !== stage && slot !== hovered && slot !== focused) viewport.unobserve(slot);
       sync();
     };
     button.addEventListener("pointerenter", (event) => { if (event.pointerType !== "touch") pick("pointer", true); });
@@ -110,7 +131,7 @@ const motion = (() => {
   }
 
   function clearPreviews() {
-    [hovered, focused].filter(Boolean).forEach((slot) => viewport.unobserve(slot));
+    [hovered, focused].filter((slot) => slot && slot !== stage).forEach((slot) => viewport.unobserve(slot));
     hovered = focused = null;
     sync();
   }

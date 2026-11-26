@@ -3,8 +3,27 @@ const headings = { start: $("startTitle"), activities: $("activityHeading"), lib
 const scrollPositions = {};
 let view = "start", returnView = "start", selectedMode = null, pendingActivity = null;
 let blueprint = BLUEPRINTS[0], scene = "scene", zen = false, remoteVisible = false, windowVisible = true;
-let lastStageKey = null, heroArt, environmentArt, toastTimeout;
+let lastStageKey, lastMiniKey, heroArt, playerBackdrop, environmentArt;
+let toastTimeout, ambientTile, previewMode, portalFlight, bloomFrame = null;
+let zenIdle, dimmed = false;
+const DIM_EVENTS = ["pointerdown", "pointermove", "touchstart", "keydown"];
 let renderedTrack = null, renderedPlaying = null;
+const libraryOrder = new Map();
+const preferredMode = () => {
+  const previous = MODE_BY_KEY.get(ACTIVITY_BY_KEY.get(state.lastActivity)?.mode);
+  if (previous) return previous;
+  const hour = new Date().getHours();
+  return MODES[hour >= 6 && hour < 17 ? 0 : hour >= 17 && hour < 21 ? 1 : 2];
+};
+
+function setPalette(mode) {
+  const { hue, secondary, tint } = mode || preferredMode();
+  const root = document.documentElement.style;
+  root.setProperty("--c1", hue);
+  root.setProperty("--c2", secondary);
+  root.setProperty("--mode-tint", tint);
+}
+
 const icon = (name) => `<svg aria-hidden="true"><use href="#i-${name}"/></svg>`;
 
 function artSlot(className = "") {
@@ -21,6 +40,12 @@ function focusHeading() {
 
 function showView(next, { focus = true, restoreScroll = false } = {}) {
   if (zen && next !== "player") setZen(false);
+  if (next !== "player") {
+    stopPortalFlight();
+    setDim(false);
+  }
+  if (next !== "activities") document.querySelectorAll(".mode-morph").forEach((item) => item.remove());
+  if (next !== "player") document.querySelectorAll(".flight-sibling").forEach((item) => item.remove());
   if (next === view) {
     if (focus) focusHeading();
     return;
@@ -31,6 +56,7 @@ function showView(next, { focus = true, restoreScroll = false } = {}) {
     document.body.classList.add("player-open");
   } else document.body.classList.remove("player-open");
   motion.clearPreviews();
+  previewMode = null;
   views[view].hidden = true;
   view = next;
   views[view].hidden = false;
@@ -63,9 +89,17 @@ function setEnvironment(mode) {
 function chooseMode(key) {
   const mode = MODE_BY_KEY.get(key);
   if (!mode) return;
+  if (selectedMode === key && view === "activities") return;
+  const entering = view !== "activities";
+  const modeSources = entering && !prefersReducedMotion ? [...$("modeGrid").children].map((button) => ({
+    key: button.dataset.mode, rect: button.getBoundingClientRect(),
+  })) : [];
+  motion.clearPreviews();
   setEnvironment(mode);
   selectedMode = key;
-  document.documentElement.style.setProperty("--accent", mode.hue);
+  $("modeStrip").querySelectorAll("button").forEach((button) => {
+    button.setAttribute("aria-pressed", String(button.dataset.switchMode === key));
+  });
   $("activityHeading").textContent = mode.name;
   $("activityFeel").textContent = mode.feel;
   const tiles = ACTIVITIES.filter((activity) => activity.mode === key).map((activity, index) => {
@@ -78,20 +112,60 @@ function chooseMode(key) {
     button.style.setProperty("--art-hue", mode.hue);
     const art = artSlot("activity-art");
     motion.setArt(art, artForActivity(activity));
-    button.innerHTML = `<span><strong>${activity.name}</strong><small>${activity.minutes ? activity.minutes + " min" : "Continuous"}</small></span>
-      <svg class="row-play" aria-hidden="true"><use href="#i-play"/></svg>`;
+    button.innerHTML = `<span class="duration-badge">${activity.minutes ? activity.minutes + "m" : "∞"}</span>
+      <span class="activity-label"><strong>${activity.name}</strong><small>${activity.feel}</small></span>
+      <span class="row-play" aria-hidden="true">${icon("play")}</span>`;
+    if (!activity.minutes) button.querySelector(".duration-badge").innerHTML =
+      '<span aria-hidden="true">∞</span><span class="sr-only">Continuous</span>';
     button.prepend(art);
     motion.bindTile(button, art);
-    button.addEventListener("click", () => launchActivity(activity.key));
+    button.addEventListener("click", () => launchActivity(activity.key, art));
     return button;
   });
+  if (key === "meditate") {
+    const tip = document.createElement("aside");
+    tip.className = "reset-tip";
+    tip.innerHTML = '<strong>Quick session</strong><p>Breathwork opens the guided breath pacer automatically.</p><button type="button" class="pill">5 min quick reset</button>';
+    tip.querySelector("button").addEventListener("click", () => launchActivity("breathwork", null, 5));
+    tiles.push(tip);
+  }
   $("activityGrid").replaceChildren(...tiles);
   markActivity();
-  showView("activities");
+  showView("activities", { focus: entering });
+  if (modeSources.length) morphModes(modeSources);
   syncArt();
 }
 
+function morphModes(sources) {
+  const timing = { duration: 320, easing: "cubic-bezier(.22,1,.36,1)" };
+  $("modeStrip").animate([{ opacity: 0 }, { opacity: 1 }], timing);
+  for (const { key, rect } of sources) {
+    const pill = $("modeStrip").querySelector(`[data-switch-mode="${key}"]`);
+    const target = pill.getBoundingClientRect();
+    const echo = artSlot("mode-morph");
+    motion.setArt(echo, artForMode(key));
+    const frame = ({ x, y, width, height }) => ({
+      left: x + "px", top: y + "px", width: width + "px", height: height + "px",
+    });
+    document.body.append(echo);
+    echo.animate([
+      { ...frame(rect), borderRadius: "20px", opacity: .78 },
+      { ...frame(target), borderRadius: "999px", opacity: 0 },
+    ], { ...timing, fill: "both" }).finished.then(() => echo.remove(), () => echo.remove());
+  }
+}
+
 function renderModes() {
+  const defaultMode = preferredMode();
+  $("modeStrip").replaceChildren(...MODES.map((mode) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "pill";
+    button.dataset.switchMode = mode.key;
+    button.textContent = mode.name;
+    button.addEventListener("click", () => chooseMode(mode.key));
+    return button;
+  }));
   $("modeGrid").replaceChildren(...MODES.map((mode) => {
     const button = document.createElement("button");
     button.type = "button";
@@ -103,7 +177,17 @@ function renderModes() {
     const art = artSlot();
     motion.setArt(art, artForMode(mode.key));
     button.prepend(art);
-    motion.bindTile(button, art);
+    if (mode === defaultMode) ambientTile = art;
+    const highlight = (on) => {
+      if (view !== "start") return;
+      if (on) previewMode = mode;
+      else if (previewMode === mode && !button.matches(":hover, :focus-visible")) previewMode = null;
+      setPalette(previewMode || preferredMode());
+    };
+    button.addEventListener("pointerenter", (event) => { if (event.pointerType !== "touch") highlight(true); });
+    button.addEventListener("pointerleave", () => highlight(false));
+    button.addEventListener("focus", () => { if (button.matches(":focus-visible")) highlight(true); });
+    button.addEventListener("blur", () => highlight(false));
     button.addEventListener("click", () => chooseMode(mode.key));
     return button;
   }));
@@ -124,16 +208,74 @@ function markActivity() {
   });
 }
 
+function stopPortalFlight() {
+  portalFlight?.cancel();
+  portalFlight = null;
+  $("heroScene").classList.remove("in-flight");
+  $("playerControls").classList.remove("reveal-controls");
+}
+
+function flyToPortal(art, source, siblings) {
+  if (prefersReducedMotion) {
+    $("heroScene").animate([{ opacity: 0 }, { opacity: 1 }], 120);
+    return;
+  }
+  const target = $("heroScene").getBoundingClientRect();
+  if (!source?.width || !target.width) return;
+  const scale = source.width / target.width;
+  const clone = artSlot("portal-flight");
+  motion.setArt(clone, art);
+  Object.assign(clone.style, {
+    top: target.y + "px", left: target.x + "px",
+    width: target.width + "px", height: target.height + "px",
+  });
+  document.body.append(clone);
+  siblings.forEach(({ rect, activity }) => {
+    const echo = artSlot("flight-sibling");
+    motion.setArt(echo, artForActivity(activity));
+    Object.assign(echo.style, {
+      top: rect.y + "px", left: rect.x + "px", width: rect.width + "px", height: rect.height + "px",
+    });
+    document.body.append(echo);
+    echo.animate([{ opacity: .8 }, { opacity: 0, transform: "translateY(10px)" }], {
+      duration: 160, easing: "ease-in", fill: "both",
+    }).finished.then(() => echo.remove(), () => echo.remove());
+  });
+  $("heroScene").classList.add("in-flight");
+  $("playerControls").classList.add("reveal-controls");
+  const animation = clone.animate([
+    { transform: `translate(${source.x - target.x}px, ${source.y - target.y}px) scale(${scale})`, borderRadius: `${18 / scale}px` },
+    { transform: "none", borderRadius: getComputedStyle($("heroScene")).borderRadius },
+  ], { delay: 16, duration: 340, easing: "cubic-bezier(.22,1,.36,1)", fill: "both" });
+  portalFlight = animation;
+  const finish = () => {
+    clone.remove();
+    if (portalFlight === animation) {
+      portalFlight = null;
+      $("heroScene").classList.remove("in-flight");
+    }
+  };
+  animation.finished.then(finish, finish);
+}
+
 let launchGeneration = 0;
-function launchActivity(key) {
+function launchActivity(key, sourceArt, minutes) {
   const activity = ACTIVITY_BY_KEY.get(key);
   if (!activity) return;
   const generation = ++launchGeneration;
   pendingActivity = activity;
-  const result = startActivity(key);
+  const result = startActivity(key, minutes);
+  stopPortalFlight();
+  const source = sourceArt?.getBoundingClientRect();
+  const siblings = source && !prefersReducedMotion ? [...$("activityGrid").querySelectorAll(".activity-card")].flatMap((card) => {
+    if (card.contains(sourceArt)) return [];
+    const rect = card.getBoundingClientRect();
+    return rect.bottom > 0 && rect.top < innerHeight ? [{ rect, activity: ACTIVITY_BY_KEY.get(card.dataset.activity) }] : [];
+  }) : [];
   pickScene("scene");
   showView("player");
-  syncArt(true);
+  syncArt();
+  if (source) flyToPortal(artForActivity(activity), source, siblings);
   renderTransport();
   return result?.finally(() => {
     if (launchGeneration !== generation) return;
@@ -143,29 +285,62 @@ function launchActivity(key) {
   });
 }
 
-function syncArt(forceReveal = false) {
-  const activity = state.activity || (!getCurrentTrack() ? pendingActivity : null);
+function syncArt() {
+  const activity = pendingActivity || state.activity;
   const track = getCurrentTrack();
-  const accent = view === "activities" ? MODE_BY_KEY.get(selectedMode)?.hue : MODE_BY_KEY.get(activity?.mode)?.hue;
-  document.documentElement.style.setProperty("--accent", accent || "#8DB9FF");
-  const art = activity ? artForActivity(activity) : artForTrack(track);
+  const liveMode = MODE_BY_KEY.get(activity?.mode || track?.category);
+  const browserMode = MODE_BY_KEY.get(selectedMode);
+  setPalette(view === "activities" ? browserMode : view === "start" ? previewMode || preferredMode() : liveMode);
   const key = activity?.key || track?.slug || "-";
-  if (lastStageKey !== key || forceReveal) {
-    motion.setArt(heroArt, art);
-    motion.setArt($("miniArt"), art);
-    const hero = $("heroScene");
-    hero.classList.remove("reveal");
-    if (view === "player") {
-      void hero.offsetWidth;
-      hero.classList.add("reveal");
-    }
+  if (lastStageKey !== key) {
+    motion.setArt(heroArt, activity ? artForActivity(activity) : artForTrack(track));
+    const backdrop = artForMode(liveMode?.key || preferredMode().key);
+    motion.setArt(playerBackdrop, backdrop);
+    $("heroVisual").style.setProperty("--zen-art", backdrop.poster ? `url("${backdrop.poster}")` : "linear-gradient(#080d17, #101a2b)");
+    $("heroVisual").style.setProperty("--zen-focal", backdrop.focal || "center");
     lastStageKey = key;
+  }
+  const miniKey = state.activity?.key || track?.slug || "-";
+  if (lastMiniKey !== miniKey) {
+    motion.setArt($("miniArt"), state.activity ? artForActivity(state.activity) : artForTrack(track));
+    lastMiniKey = miniKey;
   }
   $("heroScene").hidden = scene !== "scene";
   canvas.hidden = scene !== "signal";
   $("signalTools").hidden = scene !== "signal" || zen;
-  motion.selectStage(view === "activities" ? environmentArt : view === "player" && scene === "scene" ? heroArt : null);
+  if (view === "start" && !previewMode) ambientTile = $("modeGrid").querySelector(`[data-mode="${preferredMode().key}"] .art-slot`);
+  const playingSlot = view === "start" ? ambientTile : view === "activities" ? environmentArt : view === "player" && scene === "scene" ? heroArt : null;
+  motion.selectStage(playingSlot, view === "start");
   if (windowVisible && !remoteVisible) syncVisualizer();
+  syncBloom();
+}
+
+const bloomSamples = new Float32Array(1024);
+let bloomLevel = 0;
+function bloomVisible() {
+  return view === "player" && scene === "scene" && state.isPlaying && analyser &&
+    windowVisible && !remoteVisible && !document.hidden && !prefersReducedMotion;
+}
+
+function drawBloom() {
+  analyser.getFloatTimeDomainData(bloomSamples);
+  let squared = 0;
+  for (const sample of bloomSamples) squared += sample * sample;
+  const rms = Math.min(1, Math.sqrt(squared / bloomSamples.length) * 3.2);
+  bloomLevel += (rms - bloomLevel) * .12;
+  $("heroScene").style.setProperty("--rms", bloomLevel.toFixed(3));
+  bloomFrame = requestAnimationFrame(drawBloom);
+}
+
+function syncBloom() {
+  if (bloomVisible()) {
+    if (bloomFrame === null) bloomFrame = requestAnimationFrame(drawBloom);
+  } else {
+    if (bloomFrame !== null) cancelAnimationFrame(bloomFrame);
+    bloomFrame = null;
+    bloomLevel = 0;
+    $("heroScene").style.removeProperty("--rms");
+  }
 }
 
 function pickScene(chosen) {
@@ -182,10 +357,25 @@ function pickSignal(style) {
   savePrefs();
 }
 
+function wakeZenChrome() {
+  document.body.classList.remove("zen-idle");
+  clearTimeout(zenIdle);
+  if (zen) zenIdle = setTimeout(() => document.body.classList.add("zen-idle"), 4000);
+}
+
+function setDim(on) {
+  if (on === dimmed) return;
+  dimmed = on;
+  document.body.classList.toggle("dimmed", on);
+  $("dimScreen").setAttribute("aria-pressed", String(on));
+  $("dimScreen").textContent = on ? "Wake screen" : "Dim screen";
+}
+
 function setZen(on) {
   if (on === zen) return;
   if (on) showView("player");
   zen = on;
+  wakeZenChrome();
   document.body.classList.toggle("zen", on);
   $("exitZen").hidden = !on;
   $("enterZen").hidden = on;
@@ -202,8 +392,12 @@ function setZen(on) {
 function renderClock() {
   const { timerKind, timerTotal, timerRemain, intervalPhase, intervalRound } = getTimerState();
   const time = timerTotal ? fmtTime(timerRemain) : "";
-  $("clockValue").textContent = time || "Continuous";
-  $("clockNote").textContent = intervalPhase ? `${intervalPhase === "work" ? "Focus" : "Break"} · round ${intervalRound} of 4` : time ? "remaining" : "";
+  const onBreak = intervalPhase === "break";
+  $("playerClock").classList.toggle("on-break", onBreak);
+  $("clockValue").textContent = state.wake ? state.wake === "fading" ? "Waking up" : "Time to wake" : onBreak ? `Break · ${time.replace(/^0/, "")}` : time || "Continuous";
+  $("clockNote").textContent = intervalPhase ? `${onBreak ? "Round" : "Focus · round"} ${intervalRound} of 4` : time && !state.wake ? "remaining" : "";
+  $("skipBreak").hidden = !onBreak;
+  $("dismissWake").hidden = !state.wake;
   $("miniClock").textContent = time && `${time} left`;
   document.querySelectorAll(".timer-chip").forEach((button) => {
     button.querySelector("span").textContent = timerKind;
@@ -232,8 +426,14 @@ function renderTransport() {
   $("currentTrack").textContent = track?.title || "";
   $("miniTitle").textContent = title;
   $("miniTrack").textContent = track?.title || "Dreamlight";
-  const breakRunning = state.timer?.phase === "break" && state.timer.deadline;
-  const playing = state.isPlaying || breakRunning;
+  const playing = playbackRunning();
+  $("transport").hidden = !state.hasStarted;
+  document.body.classList.toggle("has-started", state.hasStarted);
+  $("dimScreen").hidden = state.activity?.key !== "deep_sleep" || !playing;
+  if ($("dimScreen").hidden) setDim(false);
+  const streak = focusStreak();
+  $("focusStreak").hidden = !streak;
+  $("focusStreak").textContent = `${streak}-day focus streak`;
   document.querySelectorAll('[data-transport="toggle"]').forEach((button) => {
     const label = playing ? "Pause" : state.starting ? "Cancel start" : "Play";
     button.setAttribute("aria-label", label);
@@ -252,17 +452,18 @@ function renderTransport() {
   renderPosition();
   renderFeedback();
   markActivity();
+  syncBloom();
 }
 
 function renderFeedback() {
-  const text = state.failure?.label || (state.starting ? "Starting…" : "");
+  const text = state.failure?.label || (state.starting ? "Starting…" : state.completedUntil > Date.now() ? "Session complete" : "");
   if ($("feedbackText").textContent !== text) $("feedbackText").textContent = text;
   $("retryBtn").hidden = !state.failure;
 }
 
 function announceComplete() {
   clearTimeout(toastTimeout);
-  $("feedbackText").textContent = "Session complete";
+  renderTransport();
   toastTimeout = setTimeout(() => {
     if ($("feedbackText").textContent === "Session complete") $("feedbackText").textContent = "";
   }, 3200);
@@ -305,10 +506,14 @@ setInterval(() => {
   $("breathGuide").style.setProperty("--breath-size", prefersReducedMotion ? 1 : 0.72 + expansion * 0.58);
 }, 80);
 
+function blueprintTracks() {
+  return tracksFor(libraryOrder.get(blueprint.key) || blueprint.slugs);
+}
+
 function libraryTracks() {
   const search = $("search").value.trim().toLowerCase();
   const mode = $("modeFilter").value, mood = $("moodFilter").value, band = $("bandFilter").value;
-  return tracksFor(blueprint.slugs).filter((track) =>
+  return blueprintTracks().filter((track) =>
     (!mode || ACTIVITIES.some((activity) => activity.mode === mode && activity.queue.includes(track.slug))) && (!mood || track.mood === mood) &&
     (!band || bandFamily(track) === band) &&
     (!search || `${track.title} ${track.subtitle} ${track.description} ${track.band}`.toLowerCase().includes(search)));
@@ -351,7 +556,21 @@ function renderBlueprints() {
   }));
 }
 
+function reorderLibrary(from, to) {
+  if (!from || from === to) return;
+  const order = blueprintTracks().map((track) => track.slug);
+  const fromIndex = order.indexOf(from);
+  const toIndex = order.indexOf(to);
+  if (fromIndex < 0 || toIndex < 0) return;
+  order.splice(fromIndex, 1);
+  order.splice(toIndex, 0, from);
+  libraryOrder.set(blueprint.key, order);
+  renderLibrary();
+  $("trackRows").querySelector(`[data-slug="${from}"] .track-play`).focus({ preventScroll: true });
+}
+
 function renderLibrary() {
+  let dragged = null;
   const tracks = libraryTracks();
   $("trackHeading").textContent = blueprint.name;
   $("trackCount").textContent = `${tracks.length} ${tracks.length === 1 ? "track" : "tracks"}`;
@@ -360,12 +579,41 @@ function renderLibrary() {
   $("trackRows").replaceChildren(...tracks.map((track, index) => {
     const row = document.createElement("tr");
     row.dataset.slug = track.slug;
+    row.draggable = true;
     row.innerHTML = `<td><button type="button" class="track-play" aria-label="Play ${track.title}">
       <img src="${track.cover}" alt="" loading="lazy"><span><strong>${track.title}</strong><small>${track.subtitle}</small></span>
       <span class="track-marker" hidden>${icon("signal")} <span class="sr-only"></span></span></button></td>
       <td class="track-band">${track.band}</td><td class="track-length">${Math.round(track.duration / 60)} min</td>
       <td class="track-action"><button type="button" class="pill" aria-label="Add ${track.title} next">Add next</button></td>`;
     row.querySelector(".track-play").addEventListener("click", () => startLibrary(tracks, index, blueprint.name === "All Sessions" ? "Library" : blueprint.name));
+    row.addEventListener("dragstart", (event) => {
+      dragged = track.slug;
+      event.dataTransfer.setData("text/plain", dragged);
+      event.dataTransfer.effectAllowed = "move";
+    });
+    row.addEventListener("dragover", (event) => {
+      if (dragged && dragged !== track.slug) {
+        event.preventDefault();
+        row.classList.add("queue-target");
+      }
+    });
+    row.addEventListener("dragleave", () => row.classList.remove("queue-target"));
+    row.addEventListener("dragend", () => {
+      dragged = null;
+      $("trackRows").querySelectorAll(".queue-target").forEach((target) => target.classList.remove("queue-target"));
+    });
+    row.addEventListener("drop", (event) => {
+      event.preventDefault();
+      reorderLibrary(dragged, track.slug);
+    });
+    row.addEventListener("keydown", (event) => {
+      if (!event.altKey || !["ArrowUp", "ArrowDown"].includes(event.key)) return;
+      const target = tracks[index + (event.key === "ArrowUp" ? -1 : 1)];
+      if (target) {
+        event.preventDefault();
+        reorderLibrary(track.slug, target.slug);
+      }
+    });
     row.querySelector(".track-action button").addEventListener("click", (event) => {
       addNext(track);
       const button = event.currentTarget;
@@ -462,8 +710,9 @@ function openDialog(id, origin = document.activeElement) {
 function syncTimerOptions() {
   const timer = state.timer;
   $("continuousBtn").setAttribute("aria-pressed", String(!timer));
-  $("intervalBtn").setAttribute("aria-pressed", String(Boolean(timer?.intervals)));
-  $("intervalBtn").title = state.activity?.intervals ? "Study intervals: 25 minutes of focus, 5 minutes of rest" : "";
+  document.querySelectorAll("[data-interval]").forEach((button) => {
+    button.setAttribute("aria-pressed", String(timer?.intervals && timer.workMs === Number(button.dataset.interval) * 60000 || false));
+  });
   $("timerPresets").querySelectorAll("button").forEach((button) => {
     button.setAttribute("aria-pressed", String(!timer?.intervals && timer?.total === Number(button.dataset.minutes) * 60000));
   });
@@ -523,7 +772,25 @@ function bindControls() {
     if (setTimer($("customMinutes").valueAsNumber)) $("timerDialog").close();
   });
   $("continuousBtn").addEventListener("click", () => { setTimer(0); $("timerDialog").close(); });
-  $("intervalBtn").addEventListener("click", () => { setTimer(25, true); $("timerDialog").close(); });
+  document.querySelectorAll("[data-interval]").forEach((button) => {
+    button.addEventListener("click", () => { setTimer(Number(button.dataset.interval), true); $("timerDialog").close(); });
+  });
+  document.querySelectorAll("[data-intensity]").forEach((button) => {
+    button.addEventListener("click", () => {
+      setIntensity(button.dataset.intensity);
+      for (const control of document.querySelectorAll("[data-intensity]")) {
+        control.setAttribute("aria-pressed", String(control.dataset.intensity === state.intensity));
+      }
+    });
+    button.setAttribute("aria-pressed", String(button.dataset.intensity === state.intensity));
+  });
+  $("skipBreak").addEventListener("click", skipBreak);
+  $("dismissWake").addEventListener("click", dismissWake);
+  $("dimScreen").addEventListener("click", () => setDim(!dimmed));
+  DIM_EVENTS.forEach((event) => document.addEventListener(event, (e) => {
+    if (dimmed && !e.target.closest?.("#dimScreen")) setDim(false);
+    if (zen) wakeZenChrome();
+  }, { passive: true }));
   document.querySelectorAll("dialog").forEach((dialog) => {
     dialog.querySelector(".dialog-close").addEventListener("click", () => dialog.close());
     dialog.addEventListener("click", (event) => {
@@ -552,7 +819,6 @@ function bindControls() {
     button.addEventListener("click", () => pickSignal(button.dataset.signal));
   });
   $("aboutBtn").addEventListener("click", () => openDialog("aboutDialog"));
-  $("backModes").addEventListener("click", resetModes);
   $("backPlayer").addEventListener("click", closePlayer);
   $("openPlayer").addEventListener("click", () => showView("player"));
   $("resumeBtn").addEventListener("click", resumeLastActivity);
@@ -564,7 +830,7 @@ function bindControls() {
   $("seek").addEventListener("input", (event) => seekTo(event.target.valueAsNumber));
   $("search").addEventListener("input", renderLibrary);
   ["modeFilter", "moodFilter", "bandFilter"].forEach((id) => $(id).addEventListener("change", renderLibrary));
-  $("playBlueprint").addEventListener("click", () => startLibrary(tracksFor(blueprint.slugs), 0, blueprint.name));
+  $("playBlueprint").addEventListener("click", () => startLibrary(blueprintTracks(), 0, blueprint.name));
 }
 
 function resumeLastActivity() {
@@ -588,7 +854,8 @@ function closePlayer() {
 document.addEventListener("keydown", (event) => {
   if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || document.querySelector("dialog[open]")) return;
   if (event.key === "Escape" && zen) { setZen(false); return; }
-  if (event.target !== document.body) return;
+  const focused = document.activeElement;
+  if (focused !== document.body && focused !== document.documentElement) return;
   const shortcuts = {
     " ": togglePlayback, n: () => nextTrack(), p: previousTrack,
     m: () => setVolume(state.volume, !state.muted),
@@ -611,7 +878,8 @@ function getState() {
     title: track?.title || "",
     trackSlug: track?.slug || "",
     ...art,
-    playing: state.isPlaying,
+    playing: playbackRunning(),
+    wake: state.wake,
     starting: state.starting,
     error: state.failure?.label || "",
     completed: state.completedUntil > Date.now(),
@@ -626,6 +894,8 @@ function getState() {
 function syncVisualVisibility() {
   const active = windowVisible && !remoteVisible;
   motion.suppress(!active);
+  document.body.classList.toggle("motion-suspended", !active || document.hidden);
+  syncBloom();
   if (active) syncVisualizer();
   else if (visualFrame !== null) {
     cancelAnimationFrame(visualFrame);
@@ -635,7 +905,7 @@ function syncVisualVisibility() {
 
 window.dreamlight = Object.freeze({
   getState, toggle: togglePlayback, next: () => nextTrack(), prev: previousTrack, stop: stopSession,
-  setTimer, startActivity: launchActivity, modes: MODES, activities: ACTIVITIES, timerPresets: TIMER_PRESETS,
+  setTimer, skipBreak, dismissWake, startActivity: launchActivity, modes: MODES, activities: ACTIVITIES, timerPresets: TIMER_PRESETS,
   retry: () => state.failure?.retry(),
   zen: () => setZen(!zen), breath: toggleBreath,
   setRemoteVisible(on) { remoteVisible = on; syncVisualVisibility(); },
@@ -664,17 +934,24 @@ playback.addEventListener("complete", announceComplete);
 
 motionPreference.addEventListener("change", (event) => {
   prefersReducedMotion = event.matches;
+  if (prefersReducedMotion) {
+    stopPortalFlight();
+    document.querySelectorAll(".mode-morph, .flight-sibling").forEach((item) => item.remove());
+  }
   syncArt();
 });
-document.addEventListener("visibilitychange", () => { if (windowVisible && !remoteVisible) syncVisualizer(); });
+document.addEventListener("visibilitychange", syncVisualVisibility);
+window.addEventListener("scroll", () => $("topbar").classList.toggle("scrolled", scrollY > 8), { passive: true });
 new ResizeObserver(() => { if (windowVisible && !remoteVisible) syncVisualizer(); }).observe($("heroVisual"));
 
 async function init() {
   heroArt = artSlot();
   $("heroScene").append(heroArt);
+  playerBackdrop = artSlot();
+  $("playerEnvironment").append(playerBackdrop);
   bindControls();
   try {
-    const result = await Promise.all([fetch("tracks.json").then((response) => response.json()), loadMotionInventory]);
+    const result = await Promise.all([fetch("tracks.json").then((response) => response.json()), loadMotionManifest]);
     state.allTracks = result[0].tracks;
     const activity = ACTIVITY_BY_KEY.get(state.lastActivity);
     if (activity || saved.lastFilename) {

@@ -100,23 +100,6 @@ class DreamlightHandler(BaseHTTPRequestHandler):
             self._serve_file_with_range(WEB_DIR / "index.html", "text/html; charset=utf-8")
             return
 
-        if raw_path == "/motion-index.json":
-            files = sorted(
-                file.relative_to(WEB_DIR).as_posix()
-                for folder in ("motion/modes", "motion/activities", "covers/loops")
-                for file in (WEB_DIR / folder).glob("*")
-                if file.is_file() and file.suffix in {".jpg", ".mp4"}
-            )
-            raw = json.dumps(files).encode("utf-8")
-            self.send_response(HTTPStatus.OK)
-            self.send_header("Content-Type", "application/json; charset=utf-8")
-            self.send_header("Content-Length", str(len(raw)))
-            self.send_header("Cache-Control", "no-cache")
-            self.end_headers()
-            if self.command != "HEAD":
-                self.wfile.write(raw)
-            return
-
         if raw_path == "/api/tracks":
             tracks_path = WEB_DIR / "tracks.json"
             if tracks_path.is_file():

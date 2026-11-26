@@ -15,6 +15,11 @@ const state = {
   lastActivity: saved.lastActivity || null,
   timerPresets: saved.timerPresets || {},
   timer: null,
+  playReqId: 0,
+  hasStarted: false,
+  wake: null,
+  intensity: ["gentle", "deep"].includes(saved.intensity) ? saved.intensity : "balanced",
+  focusDays: saved.focusDays || { day: "", count: 0 },
   isPlaying: false,
   starting: false,
   failure: null,
@@ -36,27 +41,30 @@ const state = {
 
 function savePrefs() {
   const { autoNext, shuffle, loopMode, crossfadeSec, vizMode, glowIntensity, volume,
-    rainLevel, oceanLevel, vinylLevel, lastActivity, timerPresets } = state;
+    rainLevel, oceanLevel, vinylLevel, lastActivity, timerPresets, intensity, focusDays } = state;
   try {
     const payload = JSON.stringify({ autoNext, shuffle, loopMode, crossfadeSec,
       vizMode, glowIntensity, volume, rainLevel, oceanLevel, vinylLevel, lastActivity, timerPresets,
-      lastFilename: getCurrentTrack()?.filename });
+      intensity, focusDays, lastFilename: getCurrentTrack()?.filename });
     if (window.desktopPrefs) window.desktopPrefs.write(payload);
     else localStorage.setItem(STORE_KEY, payload);
   } catch {}
 }
 
 let audioCtx = null, masterGain = null, sessionGain = null, analyser = null;
+let musicGain, toneShelf, toneWarmth, tonePresence, shimmer, shimmerDepth, alarmGain;
+let wakeTimer;
+const alarmVoices = new Set();
 let rainGain = null, oceanGain = null, vinylGain = null;
 const decks = [0, 1].map(() => {
   const el = new Audio();
   if (location.protocol !== "file:") el.crossOrigin = "anonymous";
   el.preload = "metadata";
   el.setAttribute("playsinline", "");
-  return { el, gain: null };
+  return { el, gain: null, requestId: 0 };
 });
 let activeDeck = 0;
-let startAttempt = null, fadeEnd = null, nativeRamp = null;
+let startAttempt = null, fadeEnd = null;
 
 function createPinkBuffer(ctx, sec) {
   const len = ctx.sampleRate * sec, buf = ctx.createBuffer(2, len, ctx.sampleRate);
@@ -85,27 +93,85 @@ function createVinylBuffer(ctx, sec) {
   return buf;
 }
 
+function attachMusicGraph() {
+  if (musicGain) return;
+  const filter = (type, frequency, q) => {
+    const node = audioCtx.createBiquadFilter();
+    node.type = type;
+    node.frequency.value = frequency;
+    if (q) node.Q.value = q;
+    return node;
+  };
+  musicGain = audioCtx.createGain();
+  toneShelf = filter("highshelf", 4500);
+  toneWarmth = filter("peaking", 220, .9);
+  tonePresence = filter("peaking", 2400, .9);
+  const amplitude = audioCtx.createGain();
+  shimmer = audioCtx.createOscillator();
+  shimmerDepth = audioCtx.createGain();
+  shimmerDepth.gain.value = 0;
+  shimmer.connect(shimmerDepth).connect(amplitude.gain);
+  shimmer.start();
+  toneShelf.connect(toneWarmth).connect(tonePresence).connect(amplitude).connect(musicGain).connect(sessionGain);
+
+  decks.forEach((deck, index) => {
+    deck.src = audioCtx.createMediaElementSource(deck.el);
+    deck.gain = audioCtx.createGain();
+    deck.gain.gain.value = index === activeDeck ? 1 : 0;
+    deck.src.connect(deck.gain).connect(toneShelf);
+  });
+}
+
+function rampParam(param, value, seconds) {
+  const now = audioCtx.currentTime;
+  if (param.cancelAndHoldAtTime) param.cancelAndHoldAtTime(now);
+  else {
+    const current = param.value;
+    param.cancelScheduledValues(now);
+    param.setValueAtTime(current, now);
+  }
+  param.linearRampToValueAtTime(value, now + seconds);
+}
+
+function applyIntensity(track = getCurrentTrack()) {
+  if (!musicGain) return;
+  const deep = state.intensity === "deep";
+  rampParam(toneShelf.gain, state.intensity === "gentle" ? -4 : 0, .18);
+  rampParam(toneWarmth.frequency, deep ? 180 : 220, .18);
+  rampParam(toneWarmth.gain, deep ? 2 : 0, .18);
+  rampParam(tonePresence.gain, deep ? 1.5 : 0, .18);
+  rampParam(shimmer.frequency, Math.min(4, (track?.beatHz || 0) / 4), .18);
+  rampParam(shimmerDepth.gain, deep ? .04 : 0, .18);
+}
+
+function setIntensity(level) {
+  if (!["gentle", "balanced", "deep"].includes(level)) return;
+  state.intensity = level;
+  ensureAudioGraph(level !== "balanced");
+  applyIntensity();
+  savePrefs();
+}
+
 function ensureAudioGraph(forceAmbientOnIOS = false) {
-  if (isIOS && !forceAmbientOnIOS && state.rainLevel===0 && state.oceanLevel===0 && state.vinylLevel===0) return;
-  if (audioCtx) { if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {}); return; }
+  const native = isIOS && state.intensity === "balanced";
+  if (native && !audioCtx && !forceAmbientOnIOS && state.rainLevel === 0 && state.oceanLevel === 0 && state.vinylLevel === 0) return;
+  if (audioCtx) {
+    if (audioCtx.state !== "running") audioCtx.resume().catch(() => {});
+    if (!native && !musicGain) attachMusicGraph();
+    return;
+  }
   const AC = window.AudioContext || window.webkitAudioContext;
   audioCtx = new AC();
+  if (audioCtx.state !== "running") audioCtx.resume().catch(() => {});
   masterGain = audioCtx.createGain();
   masterGain.gain.value = state.muted ? 0 : state.volume;
   sessionGain = audioCtx.createGain();
   analyser = audioCtx.createAnalyser();
   analyser.fftSize = 1024;
   analyser.smoothingTimeConstant = 0.42;
-
-  if (!isIOS) {
-    decks.forEach((d, idx) => {
-      d.src = audioCtx.createMediaElementSource(d.el);
-      d.gain = audioCtx.createGain();
-      d.gain.gain.value = idx === activeDeck ? 1 : 0;
-      d.src.connect(d.gain);
-      d.gain.connect(sessionGain);
-    });
-  }
+  alarmGain = audioCtx.createGain();
+  alarmGain.connect(masterGain);
+  if (!native) attachMusicGraph();
 
   const pinkBuf = createPinkBuffer(audioCtx, 6);
   const rainSrc = audioCtx.createBufferSource(); rainSrc.buffer = pinkBuf; rainSrc.loop = true;
@@ -153,7 +219,7 @@ function putGain(param, value) {
 function putDeckGain(index, gain) {
   const deck = decks[index];
   if (deck.gain) putGain(deck.gain.gain, gain);
-  else deck.el.volume = gain * volume();
+  else if (!isIOS) deck.el.volume = gain * volume();
 }
 
 function syncAmbience(on = state.isPlaying) {
@@ -167,45 +233,35 @@ function setVolume(level, muted = false) {
   state.volume = level;
   state.muted = muted;
   if (masterGain) putGain(masterGain.gain, volume());
-  if (isIOS && !nativeRamp) putDeckGain(activeDeck, 1);
   savePrefs();
   changed();
 }
 
 function collapseFade() {
   clearTimeout(fadeEnd);
-  clearInterval(nativeRamp);
-  fadeEnd = nativeRamp = null;
+  fadeEnd = null;
   decks[1 - activeDeck].el.pause();
   putDeckGain(1 - activeDeck, 0);
   putDeckGain(activeDeck, 1);
 }
 
 function equalPower(from, to, seconds) {
-  if (!seconds) { collapseFade(); return; }
+  if (!seconds || !decks[to].gain) { collapseFade(); return; }
   const points = 64;
-  if (decks[to].gain) {
-    const now = audioCtx.currentTime;
-    [[from, Math.cos], [to, Math.sin]].forEach(([index, curve]) => {
-      const param = decks[index].gain.gain;
-      param.cancelScheduledValues(now);
-      param.setValueCurveAtTime(Float32Array.from({ length: points },
-        (_, point) => curve(point / (points - 1) * Math.PI / 2)), now, seconds);
-    });
-  } else {
-    const start = performance.now();
-    nativeRamp = setInterval(() => {
-      const angle = Math.min(1, (performance.now() - start) / (seconds * 1000)) * Math.PI / 2;
-      putDeckGain(from, Math.cos(angle));
-      putDeckGain(to, Math.sin(angle));
-    }, 16);
-  }
+  const now = audioCtx.currentTime;
+  [[from, Math.cos], [to, Math.sin]].forEach(([index, curve]) => {
+    const param = decks[index].gain.gain;
+    param.cancelScheduledValues(now);
+    param.setValueCurveAtTime(Float32Array.from({ length: points },
+      (_, point) => curve(point / (points - 1) * Math.PI / 2)), now, seconds);
+  });
   fadeEnd = setTimeout(collapseFade, seconds * 1000);
 }
 
 function cancelStart() {
   if (!startAttempt) return;
   const attempt = startAttempt;
+  ++state.playReqId;
   startAttempt = null;
   attempt.abort.abort();
   attempt.el.pause();
@@ -235,10 +291,11 @@ function waitForAdvance(el, signal) {
 }
 
 async function playSelection(selection) {
-  const { queue, index, session, activity, automatic = false, resume = false } = selection;
+  const { queue, index, session, activity, automatic = false, resume = false, restoreBreak = false } = selection;
   const track = queue[index];
   if (!track) return false;
   cancelStart();
+  if (state.wake) dismissWake(false);
   collapseFade();
   if (!state.isPlaying) resetSessionGain();
 
@@ -246,13 +303,16 @@ async function playSelection(selection) {
   const continuing = resume && Boolean(activeAudio().getAttribute("src")) && !activeAudio().ended;
   const to = continuing ? from : 1 - from;
   const el = decks[to].el;
+  const requestId = ++state.playReqId;
   const attempt = { abort: new AbortController(), el };
+  decks[to].requestId = requestId;
   startAttempt = attempt;
   state.failure = null;
+  ensureAudioGraph(Boolean(activity?.gentleEnd || preferredTimer(activity).intervals));
+  if (!decks[to].gain && to !== from) decks[from].el.pause();
   state.completedUntil = 0;
   state.starting = false;
 
-  ensureAudioGraph();
   putDeckGain(to, continuing ? 1 : 0);
   if (!continuing) el.src = track.url;
   const pending = waitForAdvance(el, attempt.abort.signal);
@@ -265,7 +325,11 @@ async function playSelection(selection) {
 
   try {
     await pending;
-    if (startAttempt !== attempt) return false;
+    if (requestId !== state.playReqId || startAttempt !== attempt) {
+      // A newer request may already own this deck. Never pause that request.
+      if (decks[to].requestId === requestId) el.pause();
+      return false;
+    }
     startAttempt = null;
     state.starting = false;
     const duration = state.isPlaying && !decks[from].el.paused && from !== to
@@ -274,14 +338,20 @@ async function playSelection(selection) {
     state.queue = queue;
     state.currentIdx = index;
     state.isPlaying = true;
+    state.hasStarted = true;
+    applyIntensity(track);
     if (session !== undefined) {
       state.activity = activity || null;
       state.sessionName = session;
       if (activity) state.lastActivity = activity.key;
       setBreath(Boolean(activity?.breath));
-      installTimer(preferredTimer(activity));
+      installTimer(selection.minutes == null ? preferredTimer(activity) : { minutes: selection.minutes });
     } else {
       resumeTimer();
+      if (restoreBreak) {
+        putGain(musicGain.gain, .25);
+        rampParam(musicGain.gain, 1, 1.5);
+      }
     }
     equalPower(from, to, duration);
     syncAmbience();
@@ -290,7 +360,7 @@ async function playSelection(selection) {
     changed("track");
     return true;
   } catch {
-    if (startAttempt !== attempt) return false;
+    if (requestId !== state.playReqId || startAttempt !== attempt) return false;
     startAttempt = null;
     el.pause();
     putDeckGain(to, 0);
@@ -313,13 +383,14 @@ function pausePlayback({ holdTimer = true, render = true } = {}) {
   });
   state.isPlaying = false;
   syncAmbience(false);
-  resetSessionGain();
   if (holdTimer) pauseTimer();
+  resetSessionGain();
   updateMediaSession();
   if (render) changed();
 }
 
 function stopSession() {
+  dismissWake(false);
   pausePlayback({ render: false });
   state.timer = null;
   state.failure = null;
@@ -329,10 +400,20 @@ function stopSession() {
   changed("clock");
 }
 
+function playbackRunning() {
+  return state.isPlaying || Boolean(state.timer?.phase === "break" && state.timer.deadline);
+}
+
 function togglePlayback() {
-  if (state.timer?.phase === "break") {
-    if (state.timer.deadline) pauseTimer();
-    else resumeTimer();
+  if (state.wake) return dismissWake();
+  if (state.timer?.phase === "break" && !musicGain) {
+    if (state.timer.deadline) {
+      pauseTimer();
+      syncAmbience(false);
+    } else {
+      resumeTimer();
+      syncAmbience(true);
+    }
     changed();
     return;
   }
@@ -369,10 +450,10 @@ function previousTrack() {
   if (count) return playSelection({ queue: state.queue, index: (state.currentIdx + count - 1) % count });
 }
 
-function startActivity(key) {
+function startActivity(key, minutes) {
   const activity = ACTIVITY_BY_KEY.get(key);
   if (!activity) return;
-  return playSelection({ queue: tracksFor(activity.queue), index: 0, activity, session: activity.name });
+  return playSelection({ queue: tracksFor(activity.queue), index: 0, activity, session: activity.name, minutes });
 }
 
 function setBreath(on) {
@@ -395,7 +476,7 @@ function seekTo(seconds) {
 function updateMediaSession() {
   if (!navigator.mediaSession) return;
   const track = getCurrentTrack();
-  navigator.mediaSession.playbackState = state.isPlaying ? "playing" : "paused";
+  navigator.mediaSession.playbackState = playbackRunning() ? "playing" : "paused";
   if (track) navigator.mediaSession.metadata = new MediaMetadata({
     title: track.title, artist: "Dreamlight", album: state.sessionName,
     artwork: [{ src: new URL(track.cover, location.href).href, type: "image/png" }],
@@ -408,7 +489,7 @@ decks.forEach(({ el }, index) => {
   el.addEventListener("loadedmetadata", () => { if (index === activeDeck) changed("position"); });
   el.addEventListener("ended", () => {
     if (index !== activeDeck) return;
-    if (startAttempt) return;
+    if (startAttempt || state.wake) return;
     if (state.autoNext) nextTrack(true);
     else pausePlayback();
   });
@@ -422,7 +503,7 @@ decks.forEach(({ el }, index) => {
       navigator.mediaSession.setPositionState({ duration: dur, playbackRate: 1, position: Math.min(cur, dur) });
     }
     if (dur - cur > state.crossfadeSec + 1) automaticFrom = null;
-    if (state.isPlaying && state.autoNext && state.crossfadeSec > 0 && !startAttempt &&
+    if (state.isPlaying && !state.wake && state.autoNext && state.crossfadeSec > 0 && !startAttempt &&
         !fadeEnd && automaticFrom !== el && dur > state.crossfadeSec + 10 && dur - cur <= state.crossfadeSec) {
       automaticFrom = el;
       selectedAutomatic(activeDeck, el);
@@ -446,7 +527,7 @@ async function selectedAutomatic(index, el) {
 
 if (navigator.mediaSession) {
   const handlers = {
-    play: () => { if (!state.isPlaying && !startAttempt) togglePlayback(); },
+    play: () => { if (!playbackRunning() && !startAttempt) togglePlayback(); },
     pause: () => pausePlayback(),
     nexttrack: () => nextTrack(),
     previoustrack: previousTrack,
@@ -464,7 +545,8 @@ function preferredTimer(activity = state.activity) {
 
 function setTimer(minutes, intervals = false) {
   if (!Number.isFinite(minutes) || minutes < 0 || minutes > 1440) return false;
-  if (intervals) minutes = 25;
+  if (intervals && minutes !== 50) minutes = 25;
+  if (intervals) ensureAudioGraph(true);
   state.timerPresets[state.activity?.key || "library"] = { minutes, intervals };
   installTimer({ minutes, intervals });
   savePrefs();
@@ -472,11 +554,16 @@ function setTimer(minutes, intervals = false) {
   return true;
 }
 
-function installTimer({ minutes, intervals }) {
+function installTimer({ minutes, intervals = false }) {
+  const restore = state.timer?.phase === "break" && state.timer.deadline && !state.isPlaying;
+  dismissWake(false);
+  const total = minutes * 60000;
+  state.timer = total ? {
+    total, remaining: total, deadline: state.isPlaying ? Date.now() + total : 0,
+    intervals, round: 1, phase: "work", workMs: total, breakMs: total / 5, fading: false,
+  } : null;
   resetSessionGain();
-  const total = minutes * 60 * 1000;
-  state.timer = total ? { total, remaining: total, deadline: state.isPlaying ? Date.now() + total : 0,
-    intervals, round: 1, phase: "work", fading: false } : null;
+  if (restore) playSelection({ queue: state.queue, index: state.currentIdx, resume: true });
   changed("clock");
 }
 
@@ -485,7 +572,6 @@ function pauseTimer() {
   if (!timer?.deadline) return;
   timer.remaining = Math.max(0, timer.deadline - Date.now());
   timer.deadline = 0;
-  timer.fading = false;
   resetSessionGain();
   changed("clock");
 }
@@ -506,20 +592,142 @@ function getTimerState() {
     timerRunning: Boolean(t?.deadline),
     intervalPhase: t?.intervals ? t.phase : null,
     intervalRound: t?.intervals ? t.round : null,
+    intervalWork: t?.intervals ? t.workMs / 60000 : null,
   };
 }
 
 function resetSessionGain() {
   if (sessionGain) putGain(sessionGain.gain, 1);
-  if (isIOS && !nativeRamp) putDeckGain(activeDeck, 1);
+  if (musicGain) putGain(musicGain.gain, state.timer?.phase === "break" ? .25 : 1);
+  else if (masterGain) putGain(masterGain.gain, volume());
   if (state.timer) state.timer.fading = false;
 }
 
 function fadeSession(seconds) {
-  if (!sessionGain) return;
-  const gain = sessionGain.gain;
-  putGain(gain, gain.value);
-  gain.linearRampToValueAtTime(0, audioCtx.currentTime + seconds);
+  const gain = musicGain ? sessionGain : masterGain;
+  if (gain) rampParam(gain.gain, 0, seconds);
+}
+
+function chimeNote(frequency, time, duration, decibels, { type = "sine", strength = 1, wake = false } = {}) {
+  const oscillator = audioCtx.createOscillator();
+  const envelope = audioCtx.createGain();
+  const peak = 10 ** (decibels / 20) * strength;
+  oscillator.type = type;
+  oscillator.frequency.value = frequency;
+  envelope.gain.setValueAtTime(0, time);
+  envelope.gain.linearRampToValueAtTime(peak, time + .06);
+  envelope.gain.exponentialRampToValueAtTime(.0001, time + duration - .02);
+  envelope.gain.linearRampToValueAtTime(0, time + duration);
+  oscillator.connect(envelope).connect(wake ? alarmGain : masterGain);
+  if (wake) alarmVoices.add(oscillator);
+  oscillator.addEventListener("ended", () => {
+    alarmVoices.delete(oscillator);
+    oscillator.disconnect();
+    envelope.disconnect();
+  }, { once: true });
+  oscillator.start(time);
+  oscillator.stop(time + duration);
+}
+
+function intervalChime() {
+  if (!audioCtx) return;
+  const start = audioCtx.currentTime;
+  chimeNote(440, start, 1.2, -16, { strength: .68 });
+  chimeNote(659.25, start, 1.2, -16, { strength: .32 });
+}
+
+function wakeChime() {
+  if (!audioCtx) return;
+  const start = audioCtx.currentTime;
+  putGain(alarmGain.gain, 1);
+  [523.25, 659.25, 783.99].forEach((frequency, index) => {
+    const time = start + index * .7;
+    const level = -18 + index * 3;
+    chimeNote(frequency, time, 2.2, level, { wake: true, strength: .8 });
+    chimeNote(frequency, time, 2.2, level, { wake: true, type: "triangle", strength: .2 });
+  });
+}
+
+function beginWake() {
+  state.wake = "fading";
+  state.timer = null;
+  if (!musicGain) {
+    decks.forEach(({ el }) => el.pause());
+    state.isPlaying = false;
+  }
+  fadeSession(5);
+  wakeTimer = setTimeout(() => {
+    pausePlayback({ holdTimer: false, render: false });
+    state.wake = "ringing";
+    wakeChime();
+    wakeTimer = setTimeout(wakeChime, 6000);
+    changed();
+  }, 5000);
+  changed();
+}
+
+function dismissWake(render = true) {
+  if (!state.wake) return;
+  clearTimeout(wakeTimer);
+  if (state.wake === "fading") pausePlayback({ holdTimer: false, render: false });
+  else if (alarmGain) {
+    rampParam(alarmGain.gain, 0, .08);
+    for (const voice of alarmVoices) voice.stop(audioCtx.currentTime + .09);
+  }
+  state.wake = null;
+  if (render) completeSession();
+}
+
+function dayKey(date = new Date()) {
+  return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+}
+
+function focusStreak() {
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  return [dayKey(), dayKey(yesterday)].includes(state.focusDays.day) ? state.focusDays.count : 0;
+}
+
+function completeSession() {
+  if (state.activity?.mode === "focus" && state.focusDays.day !== dayKey()) {
+    state.focusDays = { day: dayKey(), count: focusStreak() + 1 };
+    savePrefs();
+  }
+  state.completedUntil = Date.now() + 3200;
+  changed("complete");
+}
+
+function enterBreak(timer) {
+  timer.phase = "break";
+  timer.total = timer.remaining = timer.breakMs;
+  timer.deadline = Date.now() + timer.breakMs;
+  intervalChime();
+  if (musicGain) rampParam(musicGain.gain, .25, .6);
+  else {
+    cancelStart();
+    collapseFade();
+    decks.forEach(({ el }) => el.pause());
+    state.isPlaying = false;
+  }
+  changed();
+}
+
+function endBreak(timer) {
+  const running = Boolean(timer.deadline);
+  timer.round++;
+  timer.phase = "work";
+  timer.total = timer.remaining = timer.workMs;
+  timer.deadline = running && state.isPlaying ? Date.now() + timer.workMs : 0;
+  if (running) {
+    intervalChime();
+    if (state.isPlaying) rampParam(musicGain.gain, 1, 1.5);
+    else playSelection({ queue: state.queue, index: state.currentIdx, resume: true, restoreBreak: Boolean(musicGain) });
+  } else resetSessionGain();
+  changed();
+}
+
+function skipBreak() {
+  if (state.timer?.phase === "break") endBreak(state.timer);
 }
 
 function checkDeadline() {
@@ -527,31 +735,18 @@ function checkDeadline() {
   if (!timer?.deadline) return;
   const timeLeft = timer.deadline - Date.now();
   if (timeLeft <= 0) {
-    if (timer.intervals && timer.phase === "break") {
-      timer.round++;
-      timer.phase = "work";
-      timer.total = timer.remaining = 25 * 60 * 1000;
-      timer.deadline = 0;
-      playSelection({ queue: state.queue, index: state.currentIdx, resume: true });
-    } else if (timer.intervals && timer.round < 4) {
-      pausePlayback({ holdTimer: false, render: false });
-      timer.phase = "break";
-      timer.total = timer.remaining = 5 * 60 * 1000;
-      timer.deadline = Date.now() + timer.total;
-      changed();
-    } else {
+    if (timer.phase === "break") endBreak(timer);
+    else if (timer.intervals && timer.round < 4) enterBreak(timer);
+    else if (state.activity?.gentleEnd && !timer.intervals) beginWake();
+    else {
       stopSession();
-      state.completedUntil = Date.now() + 3200;
-      changed("complete");
+      if (timer.intervals) intervalChime();
+      completeSession();
     }
-  } else if (timer.phase === "work" && timeLeft <= Math.min(state.activity?.gentleEnd ? 4500 : 1500, timer.total / 2)) {
-    if (!timer.fading) {
-      timer.fading = true;
-      fadeSession(timeLeft / 1000);
-    }
-    if (isIOS) decks.forEach(({ el }, index) => {
-      if (!el.paused) putDeckGain(index, Math.min(1, timeLeft / Math.min(state.activity?.gentleEnd ? 4500 : 1500, timer.total / 2)));
-    });
+  } else if ((!timer.intervals || (timer.round === 4 && timer.phase === "work")) &&
+      !state.activity?.gentleEnd && !timer.fading && timeLeft <= Math.min(1500, timer.total / 2)) {
+    timer.fading = true;
+    fadeSession(timeLeft / 1000);
   }
   changed("clock");
 }
