@@ -25,7 +25,7 @@
   .current { display: flex; align-items: center; gap: 11px; }
   .art { position: relative; overflow: hidden; width: 52px; height: 52px; flex: none; border-radius: 9px; border: 1px solid #ffffff32; background: radial-gradient(ellipse at 76% 22%, color-mix(in srgb, var(--accent) 38%, #151b29), #151b29 72%); }
   .art img, .art video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-  .art video { opacity: 0; transition: opacity 160ms ease; }
+  .art video { opacity: 0; transition: opacity 240ms ease; }
   .art.decoded video { opacity: 1; }
   h1, p { margin: 0; }
   h1 { font-size: 18px; line-height: 1.15; letter-spacing: -.03em; }
@@ -34,6 +34,9 @@
   .clock { display: flex; justify-content: space-between; align-items: center; min-height: 28px; }
   .clock strong { color: var(--ink); font: 600 15px/1.4 ui-monospace, Menlo, monospace; }
   .clock span { color: var(--muted); font-size: 12px; }
+  .clock.on-break strong { color: #fbbf24; }
+  .session-actions { display: flex; gap: 5px; }
+  .session-actions:has(button:not([hidden])) { margin-block: 7px; }
   .prog { height: 3px; margin-top: 5px; background: #ffffff1f; border-radius: 3px; overflow: hidden; }
   .prog b { background: var(--accent); display: block; height: 100%; width: 0; }
   .controls { display: flex; justify-content: center; align-items: center; gap: 7px; margin: 13px 0 8px; }
@@ -81,10 +84,14 @@
       <button class="pill" id="stop" data-cmd="stop" hidden>Stop</button>
       <button class="pill" id="timer" aria-expanded="false" aria-controls="timerPanel">Continuous</button>
     </div>
+    <div class="session-actions">
+      <button class="pill" id="skipBreak" data-cmd="skipBreak" hidden>Skip break</button>
+      <button class="pill" id="dismissWake" data-cmd="dismissWake" hidden>I'm awake</button>
+    </div>
     <p class="upnext" id="next"></p>
     <div class="status" id="status" hidden><span id="message" role="status"></span><button class="pill" data-cmd="retry" id="retry" hidden>Retry</button></div>
     <section id="timerPanel" aria-label="Session timer" hidden>
-      <div class="timer-types"><button class="pill" data-min="0">Continuous</button><button class="pill" id="intervals">Intervals 25 / 5</button></div>
+      <div class="timer-types"><button class="pill" data-min="0">Continuous</button><button class="pill" data-interval="25">25 / 5</button><button class="pill" data-interval="50">50 / 10</button></div>
       <div class="presets" id="presets"></div>
       <form id="custom"><input class="custom" type="number" aria-label="Custom minutes" placeholder="Custom minutes" min="0.01" max="1440" step="any" required><button class="pill" type="submit">Set timer</button></form>
     </section>
@@ -108,10 +115,18 @@
     return `${h ? h + ":" : ""}${m}:${String(s % 60).padStart(2, "0")}`;
   };
 
+  function resize() {
+    if (!visible) return;
+    const content = $("content");
+    remote.resize($("activityPanel").hidden && $("timerPanel").hidden ? 390 :
+      document.querySelector(".hero").offsetHeight + content.scrollHeight + document.querySelector(".foot").offsetHeight + 16);
+  }
+
   function setExpanded(control, panel, on) {
     $(control).setAttribute("aria-expanded", String(on));
     $(panel).hidden = !on;
     if (!on) $("content").scrollTop = 0;
+    resize();
   }
 
   function syncMotion() {
@@ -154,7 +169,11 @@
   }
   video.addEventListener("playing", () => {
     if (video.requestVideoFrameCallback) video.requestVideoFrameCallback(showVideo);
-    else showVideo();
+    else video.addEventListener("timeupdate", function reveal() {
+      if (video.currentTime <= 0) return;
+      video.removeEventListener("timeupdate", reveal);
+      showVideo();
+    });
   });
   video.addEventListener("error", () => {
     if (video.getAttribute("src")) broken.add(video.getAttribute("src"));
@@ -192,7 +211,8 @@
       button.innerHTML = `${item.name} <span>${item.minutes ? item.minutes + " min" : "Continuous"}</span>`;
       return button;
     }));
-    $("start").scrollIntoView({ block: "start" });
+    resize();
+    $("start").scrollIntoView({ block: "nearest" });
   }
 
   function applyTimer(minutes, intervals = false) {
@@ -216,12 +236,12 @@
     event.preventDefault();
     applyTimer($("custom").querySelector("input").valueAsNumber);
   });
-  $("intervals").addEventListener("click", () => applyTimer(25, true));
   document.addEventListener("click", (event) => {
     const button = event.target.closest("button");
     if (!button) return;
     if (button.dataset.cmd) remote.cmd(button.dataset.cmd);
     if (button.dataset.min != null) applyTimer(Number(button.dataset.min));
+    if (button.dataset.interval) applyTimer(Number(button.dataset.interval), true);
     if (button.dataset.mode) chooseMode(button.dataset.mode);
     if (button.dataset.activity) {
       remote.cmd("startActivity", button.dataset.activity);
@@ -243,6 +263,7 @@
   remote.onVisibility((on) => {
     visible = on;
     syncMotion();
+    resize();
   });
   remote.onState((state) => {
     player = state;
@@ -255,7 +276,10 @@
     $("playIcon").setAttribute("d", playing || state.starting ? "M7 5h4v14H7zM13 5h4v14h-4z" : "M8 5v14l11-7z");
     document.querySelector(".play").setAttribute("aria-label", playing ? "Pause" : state.starting ? "Cancel start" : "Play");
     document.querySelectorAll('[data-cmd="prev"], [data-cmd="next"]').forEach((button) => { button.disabled = !state.title; });
-    $("time").textContent = state.timerTotal ? fmt(state.timerRemain) : "Continuous";
+    $("time").textContent = state.wake ? "Time to wake" : state.timerTotal ? fmt(state.timerRemain) : "Continuous";
+    $("time").parentElement.classList.toggle("on-break", state.intervalPhase === "break");
+    $("skipBreak").hidden = state.intervalPhase !== "break";
+    $("dismissWake").hidden = !state.wake;
     $("phase").textContent = state.intervalPhase ? `${state.intervalPhase === "work" ? "Focus" : "Break"} · round ${state.intervalRound}` : state.timerTotal ? "remaining" : "";
     $("timer").textContent = state.timerKind;
     $("timer").setAttribute("aria-label", `Session timer: ${state.timerKind}`);
@@ -269,7 +293,9 @@
     $("timerPanel").querySelectorAll("[data-min]").forEach((button) => {
       button.setAttribute("aria-pressed", String(state.timerKind !== "Intervals" && state.timerTotal === Number(button.dataset.min) * 60));
     });
-    $("intervals").setAttribute("aria-pressed", String(state.timerKind === "Intervals"));
+    document.querySelectorAll("[data-interval]").forEach((button) => {
+      button.setAttribute("aria-pressed", String(state.intervalWork === Number(button.dataset.interval)));
+    });
   });
 </script>
 </body>

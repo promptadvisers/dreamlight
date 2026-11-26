@@ -20,29 +20,12 @@ const MIME_TYPES = {
   ".wav": "audio/wav",
 };
 
-function motionInventory() {
-  return ["motion/modes", "motion/activities", "covers/loops"].flatMap((folder) => {
-    try {
-      return fs.readdirSync(path.join(WEB_DIR, folder), { withFileTypes: true })
-        .filter((entry) => entry.isFile() && /\.(jpg|mp4)$/.test(entry.name))
-        .map((entry) => `${folder}/${entry.name}`);
-    } catch { return []; }
-  }).sort();
-}
-
 function startOfflineStaticServer() {
   const server = http.createServer((req, res) => {
     const reqUrl = new URL(req.url || "/", "http://127.0.0.1");
     let relPath = decodeURIComponent(reqUrl.pathname).replace(/^\/+/, "");
     if (!relPath) relPath = "index.html";
     if (relPath === "api/tracks") relPath = "tracks.json";
-    if (relPath === "motion-index.json") {
-      const data = JSON.stringify(motionInventory());
-      res.writeHead(200, { "Content-Type": MIME_TYPES[".json"], "Content-Length": Buffer.byteLength(data), "Cache-Control": "no-cache" });
-      res.end(req.method === "HEAD" ? undefined : data);
-      return;
-    }
-
     const fullPath = path.resolve(WEB_DIR, relPath);
     if (!fullPath.startsWith(WEB_DIR + path.sep) && fullPath !== WEB_DIR) {
       res.writeHead(403);
@@ -91,10 +74,15 @@ function startOfflineStaticServer() {
     });
   });
 
-  return new Promise((resolve) => {
-    server.listen(0, "127.0.0.1", () => {
-      resolve({ server, port: server.address().port });
+  return new Promise((resolve, reject) => {
+    let port = 47821;
+    server.on("error", (error) => {
+      if (error.code !== "EADDRINUSE" || port === 0) return reject(error);
+      port = 0;
+      server.listen(port, "127.0.0.1");
     });
+    server.once("listening", () => resolve({ server, port: server.address().port }));
+    server.listen(port, "127.0.0.1");
   });
 }
 

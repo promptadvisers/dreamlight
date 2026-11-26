@@ -2,7 +2,7 @@ const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, globalShortcut, sc
 const path = require("path");
 
 const ASSETS = path.join(__dirname, "assets");
-const COMMANDS = new Set(["toggle", "next", "prev", "stop", "setTimer", "startActivity", "retry", "zen", "breath"]);
+const COMMANDS = new Set(["toggle", "next", "prev", "stop", "setTimer", "startActivity", "retry", "zen", "breath", "dismissWake", "skipBreak"]);
 
 function fmt(seconds) {
   const s = Math.max(0, Math.ceil(seconds));
@@ -92,14 +92,18 @@ module.exports = function setupMenuBar({ getMainWindow, showMainWindow, baseUrl 
     refresh();
   });
 
-  function togglePopover() {
-    if (pop.isVisible()) { pop.hide(); return; }
+  function placePopover(height = pop.getSize()[1]) {
     const bounds = tray.getBounds();
     const work = screen.getDisplayNearestPoint({ x: bounds.x, y: bounds.y }).workArea;
-    const [width, height] = pop.getSize();
+    const [width] = pop.getSize();
     const x = Math.min(Math.max(bounds.x + (bounds.width - width) / 2, work.x + 6), work.x + work.width - width - 6);
     const y = Math.min(Math.max(bounds.y + bounds.height + 6, work.y + 6), work.y + work.height - height - 6);
-    pop.setPosition(Math.round(x), Math.round(y), false);
+    pop.setBounds({ x: Math.round(x), y: Math.round(y), width, height });
+  }
+
+  function togglePopover() {
+    if (pop.isVisible()) { pop.hide(); return; }
+    placePopover();
     pop.show();
     pop.focus();
   }
@@ -125,6 +129,7 @@ module.exports = function setupMenuBar({ getMainWindow, showMainWindow, baseUrl 
       { label: "Session timer", submenu: [
         { label: "Continuous", click: () => run("setTimer", 0) },
         { label: "Intervals (25 / 5)", click: () => run("setTimer", 25, true) },
+        { label: "Intervals (50 / 10)", click: () => run("setTimer", 50, true) },
         ...(last?.presets || []).map((minutes) => ({ label: `${minutes} min`, click: () => run("setTimer", minutes) })),
       ] },
       { label: "Breath pacer", click: () => { raisePlayer(); run("breath"); } },
@@ -140,6 +145,12 @@ module.exports = function setupMenuBar({ getMainWindow, showMainWindow, baseUrl 
 
   tray.on("click", togglePopover);
   tray.on("right-click", () => tray.popUpContextMenu(contextMenu()));
+  ipcMain.on("dl:resize", (event, height) => {
+    if (event.sender !== pop.webContents || !pop.isVisible() || !Number.isFinite(height)) return;
+    const bounded = Math.max(390, Math.min(580, Math.ceil(height)));
+    if (pop.getSize()[1] !== bounded) placePopover(bounded);
+  });
+
   ipcMain.on("dl:cmd", (event, name, ...args) => {
     if (event.sender !== pop.webContents) return;
     if (name === "open") { raisePlayer(); return; }
