@@ -1,10 +1,9 @@
 {
-  "name": "Dreamlight — Neural Focus Studio",
+  "name": "Dreamlight · Focus Music Studio",
   "short_name": "Dreamlight",
-  "description": "25 hours of functional binaural beat & neural phase-locking focus music with live per-track reactive visuals.",
+  "description": "25 hours of binaural focus music with live visuals for focus, relaxation, sleep and meditation.",
   "start_url": ".",
   "display": "standalone",
-  "orientation": "portrait-primary",
   "background_color": "#050711",
   "theme_color": "#050711",
   "icons": [
@@ -19,5 +18,7 @@
       "type": "image/png",
       "purpose": "any maskable"
     }
-  ]
+  ],
+  "id": "/",
+  "scope": "/"
 }

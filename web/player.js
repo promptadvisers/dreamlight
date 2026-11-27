@@ -9,6 +9,15 @@ let zenIdle, dimmed = false;
 const DIM_EVENTS = ["pointerdown", "touchstart", "keydown"];
 let renderedTrack = null, renderedPlaying = null;
 const libraryOrder = new Map();
+const connections = window.desktopConnections || null;
+const autoplayBridge = window.desktopAutoplay || null;
+let autoplayState = null;
+let calendarState = { ok: true, configured: false, connected: false, state: "CHECKING" };
+let calendarBusy = null;
+let calendarAdded = null;
+let calendarFeedback = "";
+let calendarFeedbackTimer = null;
+let calendarConnectTimer = null;
 const preferredMode = () => {
   const previous = MODE_BY_KEY.get(ACTIVITY_BY_KEY.get(state.lastActivity)?.mode);
   if (previous) return previous;
@@ -415,6 +424,203 @@ function renderClock() {
     button.querySelector("span").textContent = timerKind;
     button.setAttribute("aria-label", `Session timer: ${timerKind}${time ? ", " + time + " remaining" : ""}`);
   });
+  renderCalendar();
+}
+
+function formatClockTime(date) {
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+function calendarSessionKey() {
+  return `${state.activity?.key || state.sessionName || ""}:${state.timer?.total || 0}:${state.timer?.round || 1}`;
+}
+
+function calendarStatusLabel(status) {
+  if (!status || status.state === "CHECKING") return "Checking...";
+  if (status.ok === false) return "Unavailable";
+  if (status.configured === false || status.state === "NOT_CONFIGURED") return "Not configured";
+  if (status.connected || status.state === "ACTIVE") return "Connected";
+  if (status.state === "EXPIRED") return "Expired";
+  if (status.state === "REVOKED") return "Revoked";
+  if (status.state === "INITIATED" || status.state === "INITIALIZING") return "Connecting...";
+  return "Not connected";
+}
+
+function showCalendarFeedback(message) {
+  clearTimeout(calendarFeedbackTimer);
+  calendarFeedback = message || "";
+  renderFeedback();
+  if (calendarFeedback) {
+    calendarFeedbackTimer = setTimeout(() => {
+      calendarFeedback = "";
+      renderFeedback();
+    }, 5000);
+  }
+}
+
+function renderCalendar() {
+  const pill = $("calendarBtn");
+  const section = $("connectionsSection");
+  renderAutoplay();
+  if (!connections) {
+    pill.hidden = true;
+    section.hidden = true;
+    return;
+  }
+
+  section.hidden = false;
+  const statusEl = $("calendarStatusText");
+  const noteEl = $("calendarStatusNote");
+  const connectBtn = $("calendarConnectBtn");
+
+  const connecting = calendarBusy === "connecting";
+  const statusText = connecting ? "Waiting for browser sign-in..." : calendarStatusLabel(calendarState);
+  statusEl.textContent = statusText;
+  statusEl.classList.toggle("is-connected", Boolean(!connecting && calendarState.connected));
+  statusEl.classList.toggle("is-warning", Boolean(!connecting && (calendarState.ok === false || calendarState.state === "EXPIRED" || calendarState.state === "REVOKED")));
+
+  if (calendarState.ok === false && calendarState.message) {
+    noteEl.textContent = calendarState.message;
+  } else if (calendarState.configured === false || calendarState.state === "NOT_CONFIGURED") {
+    noteEl.textContent = "Add ~/.config/dreamlight/composio.json to connect. Requires an internet connection.";
+  } else if (connecting) {
+    noteEl.textContent = "Finish signing in to Google Calendar in your browser. Dreamlight checks automatically.";
+  } else if (calendarState.connected) {
+    noteEl.textContent = "Focus blocks sync over the internet through Composio.";
+  } else {
+    noteEl.textContent = "Requires an internet connection through Composio.";
+  }
+
+  connectBtn.textContent = connecting ? "Connecting..." : calendarState.connected ? "Reconnect" : "Connect";
+  connectBtn.disabled = connecting;
+
+  const { timerTotal, timerRemain, timerRunning, intervalPhase } = getTimerState();
+  const countdownRunning = timerTotal > 0 && timerRemain > 0 && timerRunning && intervalPhase !== "break" && !state.wake;
+  const sessionKey = calendarSessionKey();
+  if (calendarAdded && calendarAdded.sessionKey !== sessionKey) calendarAdded = null;
+
+  const showPill = Boolean(countdownRunning && calendarState.configured !== false && calendarState.state !== "CHECKING");
+  pill.hidden = !showPill;
+  if (!showPill) return;
+
+  const labelEl = pill.querySelector("span");
+  pill.classList.toggle("calendar-added", Boolean(calendarAdded && calendarBusy !== "adding"));
+  if (calendarBusy === "adding") {
+    labelEl.textContent = "Adding...";
+    pill.disabled = true;
+  } else if (calendarAdded) {
+    labelEl.textContent = calendarAdded.label;
+    pill.disabled = true;
+  } else if (connecting) {
+    labelEl.textContent = "Connecting...";
+    pill.disabled = true;
+  } else if (calendarState.connected) {
+    labelEl.textContent = "Add to calendar";
+    pill.disabled = false;
+  } else {
+    labelEl.textContent = "Connect Google Calendar";
+    pill.disabled = false;
+  }
+}
+
+function applyCalendarStatus(next) {
+  if (!next || typeof next !== "object") return;
+  calendarState = next;
+  if (next.connected && calendarBusy === "connecting") {
+    clearTimeout(calendarConnectTimer);
+    calendarBusy = null;
+  }
+  renderCalendar();
+}
+
+async function refreshCalendarStatus() {
+  if (!connections) return null;
+  try {
+    const next = await connections.status();
+    applyCalendarStatus(next);
+    return next;
+  } catch {
+    const fallback = { ok: false, configured: true, connected: false, state: "UNAVAILABLE", message: "Could not check Google Calendar status." };
+    applyCalendarStatus(fallback);
+    return fallback;
+  }
+}
+
+async function startCalendarConnect() {
+  if (!connections || calendarBusy) return null;
+  calendarBusy = "connecting";
+  renderCalendar();
+  try {
+    const result = await connections.connect();
+    if (!result?.ok) {
+      calendarBusy = null;
+      if (result?.code === "NOT_CONFIGURED") {
+        calendarState = { ok: true, configured: false, connected: false, state: "NOT_CONFIGURED" };
+      } else {
+        calendarState = { ...calendarState, ok: false, message: result?.message || "Could not start Google Calendar sign-in." };
+      }
+      showCalendarFeedback(result?.message || "Could not start Google Calendar sign-in.");
+      renderCalendar();
+      return result;
+    }
+    clearTimeout(calendarConnectTimer);
+    calendarConnectTimer = setTimeout(() => {
+      if (calendarBusy === "connecting") {
+        calendarBusy = null;
+        refreshCalendarStatus();
+      }
+    }, 2 * 60 * 1000);
+    return result;
+  } catch {
+    calendarBusy = null;
+    showCalendarFeedback("Could not start Google Calendar sign-in.");
+    renderCalendar();
+    return { ok: false, code: "CONNECT_ERROR", message: "Could not start Google Calendar sign-in." };
+  }
+}
+
+async function handleCalendarPillClick() {
+  if (!connections || calendarBusy || calendarAdded) return null;
+  if (!calendarState.connected) return startCalendarConnect();
+  const { timerTotal, timerRemain, timerRunning, intervalPhase } = getTimerState();
+  if (!(timerTotal > 0 && timerRemain > 0 && timerRunning && intervalPhase !== "break" && !state.wake)) return null;
+
+  const start = new Date();
+  const remainingMinutes = Math.max(1, Math.ceil(timerRemain / 60));
+  const end = new Date(start.getTime() + remainingMinutes * 60000);
+  const activityName = state.activity?.name || state.sessionName || "Session";
+  const sessionKey = calendarSessionKey();
+
+  calendarBusy = "adding";
+  renderCalendar();
+  try {
+    const result = await connections.addFocusBlock({
+      summary: `Focus · ${activityName}`,
+      start: start.toISOString(),
+      end: end.toISOString(),
+      description: "Dreamlight session",
+    });
+    calendarBusy = null;
+    if (result?.ok) {
+      calendarAdded = {
+        sessionKey,
+        label: `Added to Google Calendar · ${formatClockTime(start)} to ${formatClockTime(end)}`,
+      };
+      renderCalendar();
+      return result;
+    }
+    if (result?.code === "NOT_CONNECTED") {
+      calendarState = { ok: true, configured: true, connected: false, state: result.state || "EXPIRED" };
+    }
+    showCalendarFeedback(result?.message || "Could not add session to Google Calendar.");
+    renderCalendar();
+    return result;
+  } catch {
+    calendarBusy = null;
+    showCalendarFeedback("Could not add session to Google Calendar.");
+    renderCalendar();
+    return { ok: false, code: "ADD_ERROR", message: "Could not add session to Google Calendar." };
+  }
 }
 
 function renderPosition() {
@@ -470,7 +676,7 @@ function renderTransport() {
 }
 
 function renderFeedback() {
-  const text = state.failure?.label || (state.starting ? "Starting…" : state.completedUntil > Date.now() ? "Session complete" : "");
+  const text = state.failure?.label || (state.starting ? "Starting…" : state.completedUntil > Date.now() ? "Session complete" : calendarFeedback);
   if ($("feedbackText").textContent !== text) $("feedbackText").textContent = text;
   $("retryBtn").hidden = !state.failure;
 }
@@ -711,6 +917,11 @@ function openDialog(id, origin = document.activeElement) {
   if (id === "queueDialog") renderQueue();
   if (id === "timerDialog") syncTimerOptions();
   if (id === "mixerDialog") syncMixer();
+  if (id === "aboutDialog" && connections) {
+    renderCalendar();
+    refreshCalendarStatus();
+    refreshAutoplay();
+  }
   const parent = origin.closest("dialog");
   if (parent?.open) {
     origin = modalReturns.get(parent) || document.body;
@@ -801,6 +1012,8 @@ function bindControls() {
   $("skipBreak").addEventListener("click", skipBreak);
   $("dismissWake").addEventListener("click", dismissWake);
   $("dimScreen").addEventListener("click", () => setDim(!dimmed));
+  $("calendarBtn").addEventListener("click", handleCalendarPillClick);
+  $("calendarConnectBtn").addEventListener("click", startCalendarConnect);
   document.addEventListener("pointermove", () => { if (zen) wakeZenChrome(); }, { passive: true });
   DIM_EVENTS.forEach((event) => document.addEventListener(event, (e) => {
     const activatesDimButton = e.target.closest?.("#dimScreen") &&
@@ -927,6 +1140,7 @@ window.dreamlight = Object.freeze({
   setTimer, skipBreak, dismissWake, startActivity: launchActivity, modes: MODES, activities: ACTIVITIES, timerPresets: TIMER_PRESETS,
   retry: () => state.failure?.retry(),
   zen: () => setZen(!zen), breath: toggleBreath,
+  ...(connections ? { connections } : {}),
   setRemoteVisible(on) { remoteVisible = on; syncVisualVisibility(); },
   setWindowVisible(on) { windowVisible = on; syncVisualVisibility(); },
 });
@@ -963,12 +1177,53 @@ document.addEventListener("visibilitychange", syncVisualVisibility);
 window.addEventListener("scroll", () => $("topbar").classList.toggle("scrolled", scrollY > 8), { passive: true });
 new ResizeObserver(() => { if (windowVisible && !remoteVisible) syncVisualizer(); }).observe($("heroVisual"));
 
+// Meeting auto-play (owned desktop app only): Dreamlight reads the day's meetings
+// and starts a session a few minutes after each one ends.
+function renderAutoplay() {
+  const row = $("autoplayRow");
+  if (!row) return;
+  row.hidden = !autoplayBridge || !calendarState?.connected;
+  const s = autoplayState;
+  const button = $("autoplayToggleBtn");
+  const on = Boolean(s?.enabled);
+  button.textContent = on ? "On" : "Turn on";
+  button.setAttribute("aria-pressed", String(on));
+  const activityName = ACTIVITY_BY_KEY.get(s?.activity)?.name || "Deep work";
+  let text = `${activityName}, ${s?.delayMinutes ?? 10} min after each meeting ends`;
+  if (on && s?.error) text = "Could not read your calendar. Using the last schedule.";
+  else if (on && s?.nextAt) text = `Next: ${activityName} at ${formatClockTime(new Date(s.nextAt))}`;
+  else if (on) text = "No more meetings today";
+  $("autoplayStatusText").textContent = text;
+  $("autoplayStatusText").classList.toggle("is-connected", on && !s?.error);
+}
+
+async function refreshAutoplay() {
+  if (!autoplayBridge) return;
+  try { autoplayState = await autoplayBridge.status(); } catch {}
+  renderAutoplay();
+}
+
 async function init() {
   heroArt = artSlot();
   $("heroScene").append(heroArt);
   playerBackdrop = artSlot();
   $("playerEnvironment").append(playerBackdrop);
   bindControls();
+  // Only the desktop app plays offline; the browser version needs the network for its tracks.
+  if (!window.desktopPrefs) $("startTagline").textContent = "Pick a moment. Music starts instantly. No account, no ads.";
+  if (window.desktopPrefs) document.documentElement.classList.add("owned-desktop");
+  if (connections) {
+    connections.onStatus?.(applyCalendarStatus);
+    refreshCalendarStatus();
+  }
+  if (autoplayBridge) {
+    autoplayBridge.onStatus((status) => { autoplayState = status; renderAutoplay(); });
+    $("autoplayToggleBtn").addEventListener("click", async () => {
+      try { autoplayState = await autoplayBridge.set({ enabled: !autoplayState?.enabled }); } catch {}
+      renderAutoplay();
+    });
+    refreshAutoplay();
+  }
   try {
     const result = await Promise.all([fetch("tracks.json").then((response) => response.json()), loadMotionManifest]);
     state.allTracks = result[0].tracks;

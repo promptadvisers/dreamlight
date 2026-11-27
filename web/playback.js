@@ -115,6 +115,8 @@ function attachMusicGraph() {
   toneShelf.connect(toneWarmth).connect(tonePresence).connect(amplitude).connect(musicGain).connect(sessionGain);
 
   decks.forEach((deck, index) => {
+    // The gain graph owns volume after the media element is connected.
+    deck.el.volume = 1;
     deck.src = audioCtx.createMediaElementSource(deck.el);
     deck.gain = audioCtx.createGain();
     deck.gain.gain.value = index === activeDeck ? 1 : 0;

@@ -29,6 +29,22 @@ pip install -r requirements.txt && python3 -m generators list
 python3 -m generators render --track dreamlight
 ```
 
+## Connect your calendar (optional)
+
+In the Electron desktop app, you can add running focus countdown sessions to Google Calendar through [Composio](https://composio.dev), without Claude in the loop. Unlike audio playback, this feature requires an internet connection.
+
+Create `~/.config/dreamlight/composio.json` with your Composio credentials (or export `COMPOSIO_USER_API_KEY`, `COMPOSIO_ORG_ID`, and `COMPOSIO_PROJECT_ID`):
+
+```json
+{
+  "userApiKey": "your-composio-user-api-key",
+  "orgId": "your-composio-org-id",
+  "projectId": "your-composio-project-id"
+}
+```
+
+Your key stays on your machine and is sent only to Composio from the Electron main process. Nothing is stored in this repository. With no config file present, Dreamlight runs completely offline as before, and the static website stays unchanged.
+
 ## Credits
 
 - **Music:** generated with Python and NumPy. The generators are in `generators/`.
@@ -62,6 +78,7 @@ dreamlight/
 ├── desktop/                    # Minimal offline Electron desktop wrapper
 │   ├── package.json
 │   ├── main.js
+│   ├── composio.js             # Optional Google Calendar integration via Composio
 │   └── PROMPT.md               # Vendor-neutral plain-English prompt to recreate it
 ├── reports/
 │   └── render-report.md        # Acoustic verification measurements (duration, LUFS, TP, FFT)

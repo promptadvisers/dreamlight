@@ -1,5 +1,10 @@
-const { app, BrowserWindow, Menu, nativeImage, ipcMain } = require("electron");
+const { app, BrowserWindow, Menu, nativeImage, ipcMain, shell, Notification, powerMonitor } = require("electron");
 const setupMenuBar = require("./menubar");
+const composio = require("./composio");
+const { createMeetingAutoplay } = require("./meeting-autoplay");
+
+// Meeting auto-play starts music with no click, so allow audio without a user gesture.
+app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 const fs = require("fs");
 const http = require("http");
 const path = require("path");
@@ -88,6 +93,40 @@ function startOfflineStaticServer() {
 
 let staticServer = null;
 let mainWindow = null;
+let autoplay = null;
+let connectPollTimer = null;
+let connectPollDeadline = 0;
+
+function stopConnectPoll() {
+  if (connectPollTimer) {
+    clearInterval(connectPollTimer);
+    connectPollTimer = null;
+  }
+  connectPollDeadline = 0;
+}
+
+function pushConnectionStatus(status) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send("dreamlight:connections:status", status);
+}
+
+function startConnectPoll() {
+  stopConnectPoll();
+  connectPollDeadline = Date.now() + 2 * 60 * 1000;
+  connectPollTimer = setInterval(async () => {
+    if (Date.now() > connectPollDeadline || !mainWindow || mainWindow.isDestroyed()) {
+      stopConnectPoll();
+      return;
+    }
+    try {
+      const next = await composio.status();
+      pushConnectionStatus(next);
+      if (next.ok && next.connected) stopConnectPoll();
+    } catch {
+      stopConnectPoll();
+    }
+  }, 3000);
+}
 
 function preferencesPath() {
   return path.join(app.getPath("userData"), "dreamlight-preferences.json");
@@ -111,6 +150,54 @@ ipcMain.on("dreamlight:prefs:write", (event, data) => {
   }
 });
 
+ipcMain.handle("dreamlight:connections:status", async (event) => {
+  if (event.sender !== mainWindow?.webContents) {
+    return { ok: false, code: "FORBIDDEN", message: "Unauthorized sender." };
+  }
+  return composio.status();
+});
+
+ipcMain.handle("dreamlight:connections:connect", async (event) => {
+  if (event.sender !== mainWindow?.webContents) {
+    return { ok: false, code: "FORBIDDEN", message: "Unauthorized sender." };
+  }
+  const result = await composio.connect();
+  if (!result.ok) return result;
+  try {
+    await shell.openExternal(result.redirectUrl);
+  } catch {
+    return { ok: false, code: "OPEN_BROWSER_ERROR", message: "Could not open the browser to connect Google Calendar." };
+  }
+  startConnectPoll();
+  return { ok: true, opened: true, polling: true };
+});
+
+ipcMain.handle("dreamlight:autoplay:status", async (event) => {
+  if (event.sender !== mainWindow?.webContents || !autoplay) return { ok: false, code: "UNAVAILABLE" };
+  return autoplay.status();
+});
+
+ipcMain.handle("dreamlight:autoplay:set", async (event, patch) => {
+  if (event.sender !== mainWindow?.webContents || !autoplay) return { ok: false, code: "UNAVAILABLE" };
+  if (!patch || typeof patch !== "object") return { ok: false, code: "INVALID_INPUT" };
+  return autoplay.setSettings({ enabled: patch.enabled, activity: patch.activity, delayMinutes: patch.delayMinutes });
+});
+
+ipcMain.handle("dreamlight:connections:addFocusBlock", async (event, payload) => {
+  if (event.sender !== mainWindow?.webContents) {
+    return { ok: false, code: "FORBIDDEN", message: "Unauthorized sender." };
+  }
+  if (!payload || typeof payload !== "object") {
+    return { ok: false, code: "INVALID_INPUT", message: "Focus block details are required." };
+  }
+  return composio.createFocusBlock({
+    summary: payload.summary,
+    start: payload.start,
+    end: payload.end,
+    description: payload.description,
+  });
+});
+
 function showMainWindow() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   if (mainWindow.isMinimized()) mainWindow.restore();
@@ -130,6 +217,9 @@ async function createWindow() {
     minHeight: 640,
     backgroundColor: "#0a0e17",
     title: "Dreamlight",
+    // Same chrome as the Claude version: no title bar, traffic lights inside the header.
+    titleBarStyle: "hidden",
+    trafficLightPosition: { x: 12, y: 12 },
     webPreferences: {
       preload: path.join(__dirname, "player-preload.js"),
       contextIsolation: true,
@@ -153,7 +243,25 @@ async function createWindow() {
   ["show", "hide", "restore", "minimize"].forEach((event) => mainWindow.on(event, syncVisibility));
   mainWindow.webContents.on("did-finish-load", syncVisibility);
 
-  const remote = setupMenuBar({ getMainWindow: () => mainWindow, showMainWindow, baseUrl });
+  const remote = setupMenuBar({ getMainWindow: () => mainWindow, showMainWindow, baseUrl, getAutoplay: () => autoplay });
+
+  autoplay = createMeetingAutoplay({
+    listEvents: (range) => composio.listEvents(range),
+    startSession: (activity) => remote.run("startActivity", activity),
+    isPlaying: async () => Boolean((await remote.getState())?.playing),
+    notify: (settings) => {
+      if (!Notification.isSupported()) return;
+      new Notification({ title: "Meeting's over", body: `Dreamlight started a focus session, ${settings.delayMinutes} min after your meeting.`, silent: true }).show();
+    },
+    onStatus: (status) => {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("dreamlight:autoplay:status", status);
+    },
+    settingsPath: path.join(app.getPath("userData"), "meeting-autoplay.json"),
+    cachePath: path.join(app.getPath("userData"), "meeting-schedule.json"),
+    logPath: path.join(app.getPath("userData"), "meeting-autoplay.log"),
+  });
+  autoplay.start();
+  powerMonitor.on("resume", () => { autoplay.refresh().then(() => autoplay.tick()).catch(() => {}); });
 
   if (process.platform === "darwin" && app.dock) {
     app.dock.setIcon(nativeImage.createFromPath(path.join(__dirname, "assets", "icon-1024.png")));
@@ -166,7 +274,7 @@ async function createWindow() {
   }
 }
 
-app.on("before-quit", () => { app.isQuitting = true; staticServer?.close(); });
+app.on("before-quit", () => { app.isQuitting = true; stopConnectPoll(); autoplay?.stop(); staticServer?.close(); });
 
 app.whenReady().then(createWindow);
 

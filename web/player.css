@@ -208,13 +208,37 @@ input[type="range"] { accent-color: var(--accent); cursor: pointer; margin: 0; }
 .signal-on .breath-guide { top: 74%; }
 body::after { content: ""; position: fixed; z-index: 30; inset: 0; pointer-events: none; background: #1b0800; opacity: 0; transition: opacity 280ms; }
 body.dimmed::after { opacity: .35; }
-.track-details { color: var(--muted); width: min(100% - 2 * var(--gutter), 880px); margin: 0 auto; padding: 0 15px; border: 1px solid #ffffff1f; border-radius: 12px; background: rgba(13,20,36,.68); backdrop-filter: blur(14px); }
-.track-details[open] { padding-bottom: 15px; }
-.track-details summary { padding: 10px 0; cursor: pointer; color: var(--ink); }
-#intensityHelp { margin-top: 7px; font-size: 13px; }
-.track-details dl { display: flex; flex-wrap: wrap; gap: 8px 24px; }
-.track-details dt { font-size: 12px; }
-.track-details dd { margin: 0; color: var(--ink); }
+/* Track sheet: the session's facts as a compact glass card inside the controls column. */
+.track-details { container-type: inline-size; position: relative; margin-top: 18px; padding: 15px 16px 6px; color: var(--muted); border: 1px solid #ffffff1a; border-radius: 18px; background: linear-gradient(160deg, rgba(20,30,50,.62), rgba(8,12,22,.52)); backdrop-filter: blur(18px) saturate(1.25); box-shadow: inset 0 1px 0 #ffffff0f, 0 18px 50px -28px #000; overflow: hidden; }
+.track-details::before { content: ""; position: absolute; inset: 0 0 auto; height: 1px; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 55%, transparent), transparent); opacity: .7; pointer-events: none; }
+#description { color: #cdd7e6; font-size: 13px; line-height: 1.45; text-wrap: pretty; }
+.track-details dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 12px 0 0; border-top: 1px solid #ffffff14; }
+.track-details dl > div { min-width: 0; padding: 9px 12px 9px 0; border-bottom: 1px solid #ffffff10; }
+.track-details dl > div:nth-child(even) { padding-left: 12px; border-left: 1px solid #ffffff10; }
+.track-details dt { font: 650 10px/1.3 var(--body); letter-spacing: .13em; text-transform: uppercase; color: #8796ad; }
+.track-details dd { margin: 3px 0 0; color: var(--ink); font-size: 14px; font-weight: 550; line-height: 1.3; letter-spacing: -.005em; text-wrap: balance; }
+.track-details dl > div:first-child dd { color: var(--accent); }
+.track-details dl > div:nth-child(6) dd::first-letter { text-transform: uppercase; }
+.track-details dl > div:nth-child(5) dd { text-transform: capitalize; }
+@container (min-width: 400px) {
+  /* Short facts share the narrow columns; Carriers and Breath cadence get the wide third column. */
+  .track-details dl { grid-template-columns: minmax(0, .9fr) minmax(0, .72fr) minmax(0, 1.45fr); }
+  .track-details dl > div, .track-details dl > div:nth-child(even) { padding: 10px 12px; border-left: 1px solid #ffffff10; }
+  .track-details dl > div:nth-child(1) { grid-area: 1 / 1; }
+  .track-details dl > div:nth-child(3) { grid-area: 1 / 2; }
+  .track-details dl > div:nth-child(2) { grid-area: 1 / 3; }
+  .track-details dl > div:nth-child(4) { grid-area: 2 / 1; }
+  .track-details dl > div:nth-child(5) { grid-area: 2 / 2; }
+  .track-details dl > div:nth-child(6) { grid-area: 2 / 3; }
+  .track-details dl > div:is(:nth-child(1), :nth-child(4)) { padding-left: 0; border-left: 0; }
+}
+.details-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 40px; }
+#intensityHelp { font-size: 12px; line-height: 1.35; color: #8796ad; }
+.queue-link { display: inline-flex; align-items: center; gap: 5px; flex: none; min-height: 36px; padding: 0 2px; color: var(--ink); font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.queue-link svg { width: 15px; height: 15px; color: var(--accent); transition: transform 180ms var(--ease); }
+.queue-link:hover { color: var(--accent); }
+.queue-link:hover svg { transform: translateX(3px); }
+.reveal-controls .track-details { --control-index: 6; }
 body.zen { padding: 0; overflow: hidden; --zen-scrim: radial-gradient(circle at center, rgba(4,6,14,.22) 0%, rgba(4,6,14,.58) 68%, rgba(4,6,14,.82) 100%); }
 body.zen #playerEnvironment::after { background: var(--zen-scrim); }
 .zen .hero-visual { position: fixed; inset: 0; z-index: 21; border-radius: 0; --portal-size: min(72vmin, 620px); }
@@ -291,9 +315,100 @@ dialog::backdrop { background: #050a14bb; }
 .queue-item .icon-btn svg { width: 15px; }
 .queue-item .down svg { transform: rotate(180deg); }
 .credits { margin-bottom: 16px; color: var(--muted); }
+.connections-section { margin: 0 0 16px; padding: 14px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.connections-section h3 { margin-bottom: 10px; font-size: 14px; color: var(--muted); }
+.connection-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.connection-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.connection-info strong { font-size: 14px; font-weight: 600; color: var(--ink); }
+.connection-status { font-size: 12px; }
+.connection-status.is-connected { color: var(--accent); }
+.connection-status.is-warning { color: #fbbf24; }
+.connection-note { margin-top: 8px; font-size: 12px; line-height: 1.4; }
+.autoplay-row { margin-top: 14px; padding-top: 14px; border-top: 1px solid rgba(255, 255, 255, .08); }
+#autoplayToggleBtn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+#calendarBtn.calendar-added { border-color: color-mix(in srgb, var(--accent) 55%, transparent); background: var(--mode-tint); color: var(--ink); opacity: 1; }
 .shortcuts { display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; }
 .shortcuts dt { font-family: var(--mono); color: var(--accent); }
 .shortcuts dd { margin: 0; color: var(--muted); }
+/* Desktop Now playing: a full-viewport stage. Controls and track sheet on the left, the portal fills the rest. */
+@media (min-width: 1100px) {
+  .player { padding-bottom: 0; overflow: clip; }
+  .player-stage {
+    --stage-pad-y: clamp(20px, 3.6vh, 52px);
+    width: min(100%, 1840px); min-height: calc(100dvh - 56px);
+    grid-template-columns: clamp(440px, 35vw, 610px) minmax(0, 1fr);
+    gap: clamp(40px, 4.6vw, 104px);
+    padding: var(--stage-pad-y) clamp(40px, 4.4vw, 96px);
+  }
+  .hero-visual { --portal-size: min(calc(100dvh - 56px - 2 * var(--stage-pad-y)), 100%, 980px); }
+  .hero-scene { border-radius: clamp(28px, 2.2vw, 40px); box-shadow: 0 40px 120px -20px #000c, 0 0 140px -30px color-mix(in srgb, var(--accent) 50%, transparent); }
+  #vizCanvas { border-radius: clamp(28px, 2.2vw, 40px); }
+  .player-controls .back-button { margin-bottom: clamp(8px, 2.2vh, 26px); }
+  .player-mode { font-size: 12px; margin-bottom: clamp(6px, 1vh, 12px); }
+  #playerTitle { font-size: clamp(42px, 3.5vw, 68px); letter-spacing: -.038em; text-wrap: balance; }
+  .track-title { margin-top: clamp(8px, 1.1vh, 14px); font-size: clamp(15px, 1.05vw, 19px); }
+  .clock { margin: clamp(16px, 2.6vh, 34px) 0 clamp(10px, 1.6vh, 20px); gap: 11px; }
+  #clockValue { font-size: clamp(28px, 2.5vw, 46px); font-weight: 560; letter-spacing: -.035em; }
+  #clockNote { font-size: 13px; }
+  .play-cluster { gap: 10px; }
+  .play-btn { width: clamp(60px, 4.4vw, 80px); height: clamp(60px, 4.4vw, 80px); box-shadow: 0 10px 40px -12px color-mix(in srgb, var(--accent) 70%, transparent); }
+  .play-btn svg { width: clamp(23px, 1.6vw, 29px); height: clamp(23px, 1.6vw, 29px); }
+  .play-cluster .icon-btn { width: 48px; height: 48px; }
+  .play-cluster .timer-chip { margin-left: 6px; min-height: 40px; padding-inline: 14px; }
+  .seek-area { margin-top: clamp(4px, 1.2vh, 14px); }
+  .player-actions { margin-top: clamp(10px, 1.8vh, 20px); gap: 8px; }
+  .player-actions .pill { min-height: 40px; padding-inline: 14px; }
+  .intensity { margin-top: clamp(8px, 1.4vh, 14px); }
+  .track-details { margin-top: clamp(14px, 2.8vh, 34px); padding: clamp(13px, 1.8vh, 20px) clamp(15px, 1.2vw, 22px) 4px; border-radius: 20px; }
+  .track-details dd { font-size: clamp(13px, .95vw, 15.5px); }
+}
+/* Desktop activity picker: the header and tiles grow with the viewport. Three tiles stand as tall posters
+   in one row; six tiles form a 3 by 2 wall of landscape cards. The mode scene stays visible around them. */
+@media (min-width: 1100px) {
+  .activity-inner { width: min(100% - 2 * clamp(32px, 4.4vw, 96px), 1760px); padding-block: clamp(22px, 3.6vh, 52px) clamp(24px, 4vh, 56px); }
+  .mode-strip { height: 52px; padding: 5px; gap: 6px; }
+  .mode-strip button { min-height: 40px; padding-inline: clamp(18px, 1.4vw, 26px); font-size: 14px; }
+  .activity-intro { margin: clamp(16px, 2.8vh, 34px) 0 clamp(18px, 3vh, 36px); }
+  #activityHeading { font-size: clamp(46px, 4.4vw, 84px); letter-spacing: -.04em; }
+  .activity-intro p { margin-top: clamp(4px, .8vh, 10px); font-size: clamp(15px, 1.15vw, 20px); color: #c3cee0; }
+  .activity-grid {
+    --tile-w: max(220px, min(26vw, (100dvh - 56px - 255px - 2 * clamp(24px, 3.8vh, 54px)) * .8, 520px));
+    grid-template-columns: repeat(3, var(--tile-w)); gap: clamp(16px, 1.4vw, 28px);
+  }
+  .activity-grid > * { aspect-ratio: 4 / 5; }
+  .activity-grid:has(> :nth-child(4)) {
+    --tile-w: max(220px, min(28vw, (100dvh - 56px - 255px - 2 * clamp(24px, 3.8vh, 54px) - clamp(16px, 1.4vw, 28px)) / 2 * 4 / 3, 540px));
+  }
+  .activity-grid:has(> :nth-child(4)) > * { aspect-ratio: 4 / 3; }
+  .activity-card { container-type: inline-size; padding: clamp(15px, 1.3vw, 26px); border-radius: clamp(18px, 1.5vw, 26px); }
+  .activity-card strong { font-size: clamp(18px, 7cqi, 32px); letter-spacing: -.025em; }
+  .activity-card small { margin-top: 6px; font-size: clamp(12px, 3.6cqi, 15.5px); }
+  .duration-badge { top: clamp(12px, 4.5cqi, 20px); right: clamp(12px, 4.5cqi, 20px); padding: 5px 11px; font-size: clamp(11px, 3.2cqi, 13.5px); }
+  .row-play { right: clamp(11px, 5cqi, 22px); bottom: clamp(11px, 5cqi, 22px); width: clamp(36px, 13cqi, 52px); height: clamp(36px, 13cqi, 52px); }
+  .activity-card:is(:hover, :focus-visible) .activity-label { padding-right: clamp(32px, 15cqi, 60px); }
+  .activity-grid > .reset-tip { aspect-ratio: auto; align-self: end; padding: clamp(17px, 1.8vw, 30px); border-radius: clamp(18px, 1.5vw, 26px); }
+  .reset-tip strong { font-size: clamp(16px, 1.5vw, 24px); }
+  .reset-tip p { font-size: clamp(13px, 1vw, 16px); }
+}
+@media (min-width: 1360px) {
+  /* Room to spare: session actions such as Add to calendar ride on the transport row. */
+  .player-controls { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 10px; }
+  .player-controls > * { grid-column: 1 / -1; }
+  .player-controls .back-button { justify-self: start; }
+  .player-controls > .play-cluster { grid-column: 1; }
+  .player-controls > .session-actions { grid-column: 2; margin-top: 0; align-self: center; }
+}
+@media (min-width: 1100px) and (max-height: 940px) {
+  .player-controls .back-button { min-height: 32px; margin-bottom: 4px; }
+  #playerTitle { font-size: clamp(38px, 3.2vw, 58px); }
+  .seek-area { margin-top: 0; }
+  .player-actions { margin-top: 6px; }
+  .clock { margin-block: 12px 8px; }
+  .track-details { margin-top: 12px; }
+  #description { font-size: 12.5px; }
+  .track-details dl { margin-top: 9px; }
+  .track-details dl > div, .track-details dl > div:nth-child(even) { padding-block: 7px; }
+}
 @media (max-width: 1000px) {
   #focusStreak, .topbar .headphone-hint { display: none; }
   .launcher-inner .headphone-hint { display: flex; }
@@ -375,6 +490,18 @@ dialog::backdrop { background: #050a14bb; }
   .tracks th, .tracks td { padding-inline: 3px; }
   dialog { margin: auto auto max(8px, env(safe-area-inset-bottom)); max-height: calc(100dvh - 20px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
 }
+/* Phone and home-screen app (26 Nov 2026): fill the screen. Full-width art on Now playing,
+   mood cards that grow with the available height. Short phones keep the compact rule below. */
+@media (max-width: 720px) {
+  .mode-card { height: clamp(146px, calc((100dvh - 300px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) / 2), 280px); }
+  .hero-visual { min-height: 0; --portal-size: min(100%, 50dvh); }
+  .player-stage { padding-top: 8px; }
+  .player-stage:not(.signal-on) .visual-tools,
+  .hero-visual .visual-tools { flex-direction: row; align-items: center; top: 10px; right: 10px; gap: 6px; }
+  .player-stage:not(.signal-on) .visual-tools .segments { flex-direction: row; background: #0b111dd9; backdrop-filter: blur(12px); }
+  .player-stage:not(.signal-on) .visual-tools .segments button { padding-inline: 11px; }
+  .player-controls .back-button { top: 18px; left: calc(var(--gutter) + 10px); padding-inline: 11px 13px; border-radius: 999px; background: #0b111dd9; backdrop-filter: blur(12px); border: 1px solid #ffffff2b; }
+}
 @media (max-width: 370px) {
   .brand img { display: none; }
   .navigation { gap: 1px; }
@@ -390,3 +517,8 @@ dialog::backdrop { background: #050a14bb; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0s !important; transition-duration: 0s !important; }
 }
+
+/* Owned Mac app: same chrome and start position as the Claude version */
+.owned-desktop .topbar { -webkit-app-region: drag; app-region: drag; padding-left: 88px; }
+.owned-desktop .topbar :is(button, nav, input, .pill, a) { -webkit-app-region: no-drag; app-region: no-drag; }
+.owned-desktop .launcher-inner { padding-top: clamp(58px, 9vh, 84px); }

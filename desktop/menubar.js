@@ -11,7 +11,7 @@ function fmt(seconds) {
   return `${h ? h + ":" : ""}${m}:${String(s % 60).padStart(2, "0")}`;
 }
 
-module.exports = function setupMenuBar({ getMainWindow, showMainWindow, baseUrl }) {
+module.exports = function setupMenuBar({ getMainWindow, showMainWindow, baseUrl, getAutoplay = () => null }) {
   const image = nativeImage.createFromPath(path.join(ASSETS, "trayTemplate.png"));
   image.setTemplateImage(true);
   const tray = new Tray(image);
@@ -113,6 +113,17 @@ module.exports = function setupMenuBar({ getMainWindow, showMainWindow, baseUrl 
     showMainWindow();
   }
 
+  function autoplayMenu() {
+    const autoplay = getAutoplay();
+    if (!autoplay) return [];
+    const s = autoplay.status();
+    const next = s.enabled && s.nextAt
+      ? `Next: ${new Date(s.nextAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
+      : s.enabled ? "No more meetings today" : `${s.delayMinutes} min after each meeting`;
+    return [{ label: "Play after meetings", sublabel: next, type: "checkbox", checked: s.enabled,
+      click: (item) => { autoplay.setSettings({ enabled: item.checked }); } }];
+  }
+
   function contextMenu() {
     return Menu.buildFromTemplate([
       { label: last?.title || "Dreamlight", enabled: false },
@@ -134,6 +145,8 @@ module.exports = function setupMenuBar({ getMainWindow, showMainWindow, baseUrl 
       ] },
       { label: "Breath pacer", click: () => { raisePlayer(); run("breath"); } },
       { label: "Cinema Zen", click: () => { raisePlayer(); run("zen"); } },
+      { type: "separator" },
+      ...autoplayMenu(),
       { type: "separator" },
       { label: "Open Dreamlight", click: raisePlayer },
       ...(process.platform === "darwin" ? [
@@ -166,5 +179,5 @@ module.exports = function setupMenuBar({ getMainWindow, showMainWindow, baseUrl 
     globalShortcut.unregisterAll();
   });
 
-  return { run };
+  return { run, getState: () => evaluate("window.dreamlight?.getState()") };
 };
