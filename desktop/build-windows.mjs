@@ -34,8 +34,15 @@ function powershell(script) {
 }
 
 function stopRunningCopy() {
-  try { execFileSync("taskkill.exe", ["/IM", "Dreamlight.exe", "/F"], { stdio: "ignore" }); } catch {}
+  try { execFileSync("taskkill.exe", ["/IM", "Dreamlight.exe", "/F", "/T"], { stdio: "ignore" }); } catch { return; }
+  // Windows keeps the files locked for a moment after the app closes, so wait until it's really gone.
+  for (let i = 0; i < 40; i++) {
+    const list = execFileSync("tasklist.exe", ["/FI", "IMAGENAME eq Dreamlight.exe", "/NH"]).toString();
+    if (!list.includes("Dreamlight.exe")) return;
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250);
+  }
 }
+const removeFolder = (dir) => fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 });
 
 function desktopLink() {
   // Ask Windows where the desktop is, since OneDrive often moves it.
@@ -46,7 +53,7 @@ function desktopLink() {
 if (flag("uninstall")) {
   if (process.platform !== "win32") { console.error("Uninstall only works on Windows."); process.exit(1); }
   stopRunningCopy();
-  fs.rmSync(INSTALL_DIR, { recursive: true, force: true });
+  removeFolder(INSTALL_DIR);
   fs.rmSync(START_MENU_LINK, { force: true });
   fs.rmSync(desktopLink(), { force: true });
   console.log("Dreamlight is uninstalled. Your settings are still in %APPDATA%\\dreamlight if you want to delete them too.");
@@ -104,7 +111,7 @@ console.log(`Built ${OUT}`);
 // 4. Install for this user, with Start menu and desktop shortcuts.
 if (flag("install")) {
   stopRunningCopy();
-  fs.rmSync(INSTALL_DIR, { recursive: true, force: true });
+  removeFolder(INSTALL_DIR);
   fs.mkdirSync(path.dirname(INSTALL_DIR), { recursive: true });
   // Copy rather than move, since the project folder may be on a different drive.
   fs.cpSync(OUT, INSTALL_DIR, { recursive: true });

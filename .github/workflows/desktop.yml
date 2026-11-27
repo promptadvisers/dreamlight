@@ -17,8 +17,8 @@ jobs:
         with: { node-version: 22 }
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - name: Get one track
-        run: python get_music.py --only 1
+      - name: Get the music
+        run: python get_music.py
       - name: Install and build
         working-directory: desktop
         run: |
@@ -38,8 +38,8 @@ jobs:
           if (!$ok) { throw "The player did not start" }
           $audio = Invoke-WebRequest -UseBasicParsing -Headers @{ Range = "bytes=0-1023" } "http://127.0.0.1:47821/audio/$((Get-Content web/tracks.json | ConvertFrom-Json).tracks[0].filename)"
           if ($audio.StatusCode -ne 206) { throw "Audio range request failed" }
-          Start-Process $exe -ArgumentList "--dreamlight=toggle"
-          Start-Sleep 8
+          Start-Process $exe -ArgumentList "--dreamlight=toggle"   # taskbar jump list Play, sent to the running copy
+          Start-Sleep 10
           if (@(Get-Process Dreamlight -ErrorAction SilentlyContinue | Where-Object MainWindowHandle -ne 0).Count -ne 1) { throw "Expected one Dreamlight window" }
           Add-Type -AssemblyName System.Windows.Forms, System.Drawing
           $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
