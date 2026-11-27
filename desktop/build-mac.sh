@@ -4,6 +4,8 @@
 set -e; INSTALL="$1"
 cd "$(dirname "$0")"; D="$(cd .. && pwd)"; OUT="$D/dist/Dreamlight.app"
 rm -rf "$D/dist"; mkdir -p "$D/dist"
+# Newer Electron versions download their runtime on first run; fetch it now if npm start has not run yet.
+[ -d node_modules/electron/dist/Electron.app ] || node node_modules/electron/install.js
 cp -R node_modules/electron/dist/Electron.app "$OUT"
 R="$OUT/Contents/Resources"; rm -f "$R/default_app.asar" "$R/electron.icns"; mkdir -p "$R/app/assets"
 cp main.js menubar.js composio.js meeting-autoplay.js player-preload.js tray-preload.js tray.html "$R/app/"
