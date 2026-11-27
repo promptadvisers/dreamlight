@@ -104,14 +104,14 @@ Downloaded the ZIP instead of cloning? Unzip it, open a terminal in the `dreamli
 
 Host the `web/` folder on a static host. The Vercel CLI is the quickest route.
 
+The music is 2.2 GB (about 82 MB a track), and free hosting plans often cap uploads well below that. Vercel's free plan, for example, limits CLI uploads to 100 MB. If your host refuses it, deploy the player without `web/audio`, put the MP3s on storage that allows cross-origin requests (Cloudflare R2's free tier fits, S3 works too), point the `url` fields in `web/tracks.json` at them, and deploy again.
+
 ```bash
 npm i -g vercel
 cd web && vercel --prod           # sign in when it asks, then open the link it prints
 ```
 
 Then add it to your home screen, below. The phone version streams the music, so it needs an internet connection.
-
-The music is 2.2 GB (about 82 MB a track), and free hosting plans often cap uploads well below that. Vercel's free plan, for example, limits CLI uploads to 100 MB. If your host refuses it, deploy the player without `web/audio`, put the MP3s on storage that allows cross-origin requests (Cloudflare R2's free tier fits, S3 works too), point the `url` fields in `web/tracks.json` at them, and deploy again.
 
 ### 3. Mac app (and Windows or Linux)
 
