@@ -23,19 +23,34 @@
 Copy this into **Claude Code**, **Codex**, or any AI agent that can run commands on your computer. It does the whole setup for you, explains each step in plain English and asks before installing anything.
 
 ```text
-Set up Dreamlight for me, the free focus music app at https://github.com/promptadvisers/dreamlight
+Set up Dreamlight for me, the free focus music app at
+https://github.com/promptadvisers/dreamlight
 
-I'm not technical, so please do every step yourself, explain each one in a sentence of plain English, and ask me before you install anything on my computer.
+I'm not technical, so please do every step yourself, explain each one in a sentence of
+plain English, and ask me before you install anything on my computer.
 
-1. Check that I have git, Python 3 and Node.js. If something is missing, tell me what it is and install it once I say yes.
+1. Check that I have git, Python 3 and Node.js. If something is missing, tell me what it
+   is and install it once I say yes.
 2. Download the project into a folder called dreamlight in my home folder.
-3. Get the music by running "python3 get_music.py" inside that folder. It's about 2.2 GB, so tell me roughly how long that will take on my connection.
-4. Start the player with "python3 server.py 8787", open http://localhost:8787 in my browser, and check that a track plays.
+3. Get the music by running "python3 get_music.py" inside that folder. It's about
+   2.2 GB, so tell me roughly how long that will take on my connection.
+4. Start the player with "python3 server.py 8787", open http://localhost:8787 in my
+   browser, and check that a track plays.
 5. Then ask me which of these I want, and do the ones I pick.
-   a) A desktop app. On a Mac, run "npm install" in the desktop folder, then "./build-mac.sh --install", so Dreamlight sits in my Applications folder and plays offline. On Windows or Linux, run "npm install" and "npm start" in the desktop folder.
-   b) A website I can open on my phone. Deploy the web folder (music included) to Vercel, helping me sign in or make a free account, then give me the link and walk me through adding it to my home screen. If my Vercel plan won't take all the music, tell me plainly and suggest the simplest fix.
-   c) My Google Calendar, connected through Composio, so I can add focus sessions to my calendar and have music start after my meetings. Follow the "Connect your calendar" section of the README. Never show my Composio key on screen or save it inside the project folder.
-6. Finish with a short summary of what's installed, where it lives, and how to open it next time.
+   a) A desktop app. On a Mac, run "npm install" in the desktop folder, then
+      "./build-mac.sh --install", so Dreamlight sits in my Applications folder and plays
+      offline. On Windows or Linux, run "npm install" and "npm start" in the desktop
+      folder.
+   b) A website I can open on my phone. Deploy the web folder (music included) to
+      Vercel, helping me sign in or make a free account, then give me the link and walk
+      me through adding it to my home screen. If my Vercel plan won't take all the
+      music, tell me plainly and suggest the simplest fix.
+   c) My Google Calendar, connected through Composio, so I can add focus sessions to my
+      calendar and have music start after my meetings. Follow the "Connect your
+      calendar" section of the README. Never show my Composio key on screen or save it
+      inside the project folder.
+6. Finish with a short summary of what's installed, where it lives, and how to open it
+   next time.
 ```
 
 Prefer to do it by hand? Every step is below.
