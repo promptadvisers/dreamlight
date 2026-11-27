@@ -6,7 +6,7 @@
 - Mean / Median: **-15.42 LUFS** / **-15.90 LUFS**
 - Target for 14 new tracks: **-15.5 LUFS (±1.0 LU)**, True Peak **< -1.0 dBTP**, Duration **3600 ± 1 s**, 44.1 kHz discrete stereo, zero silence gaps > 2 s, FFT L/R binaural carrier diff matching stated beat.
 
-## 14 New Tracks — Verification Measurements
+## 14 New Tracks: Verification Measurements
 
 | Slug | Title | Duration (s) | Format | Integrated LUFS | True Peak (dBTP) | Stated L / R (Δ Hz) | FFT Measured L / R (Δ Hz) | Silence Gaps >2s | Status |
 |---|---|---:|---|---:|---:|---|---|---:|---|
@@ -25,7 +25,7 @@
 | `lunar_cradle` | Lunar Cradle | 3600.00 | 44100 Hz 2ch | -15.60 | -3.90 | 122.22 / 124.72 (Δ2.5) | 122.22 / 124.72 (Δ2.5) | 0 | **PASS** |
 | `deep_trench` | Deep Trench | 3600.00 | 44100 Hz 2ch | -16.10 | -5.40 | 109.25 / 110.75 (Δ1.5) | 109.25 / 110.75 (Δ1.5) | 0 | **PASS** |
 
-## Existing 11 Tracks — Reference Measurements
+## Existing 11 Tracks: Reference Measurements
 
 | Slug | Title | Duration (s) | Format | Integrated LUFS | True Peak (dBTP) | Stated L / R (Δ Hz) | FFT Measured L / R (Δ Hz) | Silence Gaps >2s | Status |
 |---|---|---:|---|---:|---:|---|---|---:|---|
@@ -42,5 +42,5 @@
 | `abyssal_drift` | Abyssal Drift | 3600.00 | 44100 Hz 2ch | -16.30 | -4.40 | 137.09 / 140.09 (Δ3.0) | 137.09 / 140.09 (Δ3.0) | 0 | **PASS** |
 
 ## Summary
-- New tracks verified: **14 / 14** — All checks passed: **YES**
+- New tracks verified: **14 / 14**, all checks passed: **YES**
 - Existing tracks verified: **11 / 11**

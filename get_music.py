@@ -60,7 +60,11 @@ def main() -> int:
             print(f"[{i}/{len(names)}] {name} already here")
             continue
         print(f"[{i}/{len(names)}] {name}")
-        download(url, dest)
+        try:
+            download(url, dest)
+        except Exception as exc:
+            print(f"\nCould not download {name} ({exc}). Check your internet connection and run this again; finished tracks are kept.")
+            return 1
 
     print(f"Done. {len(names)} tracks in {AUDIO}")
     return 0

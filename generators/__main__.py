@@ -164,7 +164,7 @@ def write_render_report(results: list[dict], report_path: Path):
         f"- Mean / Median: **{mean_ex:.2f} LUFS** / **{med_ex:.2f} LUFS**",
         f"- Target for 14 new tracks: **-15.5 LUFS (±1.0 LU)**, True Peak **< -1.0 dBTP**, Duration **3600 ± 1 s**, 44.1 kHz discrete stereo, zero silence gaps > 2 s, FFT L/R binaural carrier diff matching stated beat.",
         "",
-        "## 14 New Tracks — Verification Measurements",
+        "## 14 New Tracks: Verification Measurements",
         "",
         "| Slug | Title | Duration (s) | Format | Integrated LUFS | True Peak (dBTP) | Stated L / R (Δ Hz) | FFT Measured L / R (Δ Hz) | Silence Gaps >2s | Status |",
         "|---|---|---:|---|---:|---:|---|---|---:|---|",
@@ -181,7 +181,7 @@ def write_render_report(results: list[dict], report_path: Path):
 
     lines += [
         "",
-        "## Existing 11 Tracks — Reference Measurements",
+        "## Existing 11 Tracks: Reference Measurements",
         "",
         "| Slug | Title | Duration (s) | Format | Integrated LUFS | True Peak (dBTP) | Stated L / R (Δ Hz) | FFT Measured L / R (Δ Hz) | Silence Gaps >2s | Status |",
         "|---|---|---:|---|---:|---:|---|---|---:|---|",
@@ -203,7 +203,7 @@ def write_render_report(results: list[dict], report_path: Path):
     lines += [
         "",
         "## Summary",
-        f"- New tracks verified: **{len(new_tracks)} / 14** — All checks passed: **{'YES' if all_new_pass else 'NO'}**",
+        f"- New tracks verified: **{len(new_tracks)} / 14**, all checks passed: **{'YES' if all_new_pass else 'NO'}**",
         f"- Existing tracks verified: **{len(existing)} / 11**",
     ]
     report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")

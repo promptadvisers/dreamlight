@@ -29,26 +29,30 @@ https://github.com/promptadvisers/dreamlight
 I'm not technical, so please do every step yourself, explain each one in a sentence of
 plain English, and ask me before you install anything on my computer.
 
-1. Check that I have git, Python 3 and Node.js. If something is missing, tell me what it
-   is and install it once I say yes.
-2. Download the project into a folder called dreamlight in my home folder.
+1. Check that I have git and Python 3. If something is missing, tell me what it is and
+   install it once I say yes. On Windows, Python may be called "python" instead of
+   "python3".
+2. Download the project into a folder called dreamlight in my home folder. If I already
+   unzipped Dreamlight-App.zip, use that folder instead.
 3. Get the music by running "python3 get_music.py" inside that folder. It's about
    2.2 GB, so tell me roughly how long that will take on my connection.
 4. Start the player with "python3 server.py 8787", open http://localhost:8787 in my
    browser, and check that a track plays.
 5. Then ask me which of these I want, and do the ones I pick.
-   a) A desktop app. On a Mac, run "npm install" in the desktop folder, then
-      "./build-mac.sh --install", so Dreamlight sits in my Applications folder and plays
-      offline. On Windows or Linux, run "npm install" and "npm start" in the desktop
-      folder.
-   b) A website I can open on my phone. Deploy the web folder (music included) to
-      Vercel, helping me sign in or make a free account, then give me the link and walk
-      me through adding it to my home screen. If my Vercel plan won't take all the
-      music, tell me plainly and suggest the simplest fix.
+   a) A desktop app. Install Node.js if I don't have it. On a Mac, run "npm install" in
+      the desktop folder, then "./build-mac.sh --install", so Dreamlight sits in my
+      Applications folder and plays offline. On Windows or Linux, run "npm install" and
+      "npm start" in the desktop folder.
+   b) A website I can open on my phone. Deploy the web folder to Vercel, helping me sign
+      in or make a free account. The music is 2.2 GB and Vercel's free plan may refuse
+      an upload that big. If it does, deploy the player without web/audio, put the MP3s
+      on storage that allows cross-origin requests (Cloudflare R2's free tier fits),
+      point the "url" fields in web/tracks.json at them and redeploy. Then give me the
+      link and walk me through adding it to my home screen.
    c) My Google Calendar, connected through Composio, so I can add focus sessions to my
-      calendar and have music start after my meetings. Follow the "Connect your
-      calendar" section of the README. Never show my Composio key on screen or save it
-      inside the project folder.
+      calendar and have music start after my meetings. This works in the desktop app, so
+      set up a) first if I haven't. Follow the "Connect your calendar" section of the
+      README. Never show my Composio key on screen or save it inside the project folder.
 6. Finish with a short summary of what's installed, where it lives, and how to open it
    next time.
 ```
@@ -61,12 +65,12 @@ Prefer to do it by hand? Every step is below.
 
 ## What's inside
 
-- **25 one-hour tracks**, rendered by the Python in [`generators/`](generators/). No samples, no loops, no outside audio, so the music is royalty-free and yours to use.
+- **25 one-hour tracks**, rendered by the Python in [`generators/`](generators/). No samples, no audio loops, no outside audio, so the music is royalty-free and yours to use.
 - **14 activities** across Focus, Relax, Sleep and Meditate. Deep work, Morning coffee, Study with 25/5 intervals, Power nap with a gentle wake, Breathwork with a breath pacer, and more.
 - **Motion art for every mood.** Each activity, mode and track has its own seamless video loop, plus a live "Signal" visualizer that reacts to the music.
 - **Ambience on top.** Rain, ocean and vinyl crackle, synthesized live in your browser.
 - **A real desktop app.** Menu bar remote, Dock countdown, a global play/pause shortcut, Open at login, and it plays with Wi‑Fi off.
-- **Your calendar, optional.** Add a focus session to Google Calendar, or let Dreamlight start Deep work ten minutes after your meetings end.
+- **Your calendar, optional.** In the desktop app, add a focus session to Google Calendar, or let Dreamlight start Deep work ten minutes after your meetings end.
 - **No account, no ads, no tracking.** Plain files you can host anywhere, fork or change.
 
 > Binaural beats need stereo headphones. Dreamlight is music for focus and relaxation, not a medical device.
@@ -82,7 +86,7 @@ Prefer to do it by hand? Every step is below.
 | **1. Web** | Any browser, from your computer | Yes, from your own computer | Python 3 |
 | **2. Phone** | Home screen app (PWA) on iPhone or Android | No, it streams from your host | A hosted copy of `web/` |
 | **3. Mac app** | Its own app in Applications, plus a menu bar remote | Yes | Node.js (Windows and Linux run it with `npm start`) |
-| **4. Claude app** | A window of Claude Desktop, via Install as app | No, it needs you online and signed in to Claude | A Claude account |
+| **4. Claude app** | A window of Claude Desktop, via Install as app | No, it needs you online and signed in to Claude | A Claude account and one prompt |
 
 ### 1. Web
 
@@ -94,11 +98,11 @@ python3 server.py 8787            # then open http://localhost:8787
 
 `get_music.py` only uses Python's standard library and skips tracks you already have, so you can stop it and run it again. Want a quick test first? `python3 get_music.py --only 3`.
 
-On a Mac you can also double-click `start_player.command`.
+Downloaded the ZIP instead of cloning? Unzip it, open a terminal in the `dreamlight` folder and start from `python3 get_music.py`. On Windows, use `python` in place of `python3`. On a Mac you can also double-click `start_player.command` once the music is in.
 
 ### 2. Phone
 
-Host the `web/` folder (music included) anywhere that serves static files, such as Vercel, Netlify, Cloudflare Pages or your own server. The fastest route is the Vercel CLI.
+Host the `web/` folder on a static host. The Vercel CLI is the quickest route.
 
 ```bash
 npm i -g vercel
@@ -107,7 +111,7 @@ cd web && vercel --prod           # sign in when it asks, then open the link it 
 
 Then add it to your home screen, below. The phone version streams the music, so it needs an internet connection.
 
-If your host refuses files this big (each track is about 82 MB), put the MP3s on any storage that allows cross-origin requests, such as Cloudflare R2 or S3, and point the `url` fields in `web/tracks.json` at them.
+The music is 2.2 GB (about 82 MB a track), and free hosting plans often cap uploads well below that. Vercel's free plan, for example, limits CLI uploads to 100 MB. If your host refuses it, deploy the player without `web/audio`, put the MP3s on storage that allows cross-origin requests (Cloudflare R2's free tier fits, S3 works too), point the `url` fields in `web/tracks.json` at them, and deploy again.
 
 ### 3. Mac app (and Windows or Linux)
 
@@ -221,8 +225,8 @@ python3 -m generators dna --csv generators/sample_dna_fake.csv --duration 30 --o
 
 The desktop app can talk to Google Calendar through [Composio](https://composio.dev), with no Claude in the loop. Composio's free plan is plenty for this.
 
-1. Make a free Composio account and copy your **user API key**, **org ID** and **project ID** from its settings.
-2. Save them in `~/.config/dreamlight/composio.json` (outside this project, so they can never be committed).
+1. Make a free Composio account and copy your **User API key** (not the Project API key), **Org ID** and **Project ID** from its settings.
+2. Save them in `~/.config/dreamlight/composio.json`, which is `%USERPROFILE%\.config\dreamlight\composio.json` on Windows. It sits outside this project, so it can never be committed.
 
    ```json
    {

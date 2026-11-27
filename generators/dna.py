@@ -383,7 +383,7 @@ class HelixDNAEngine:
             "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
             "-f", "s16le", "-ar", str(SR), "-ac", "2", "-i", "pipe:0",
             "-c:a", "libmp3lame", "-b:a", bitrate, "-joint_stereo", "0",
-            "-metadata", "title=Helix Signature — Custom 14.5 Hz Focus",
+            "-metadata", "title=Helix Signature - Custom 14.5 Hz Focus",
             "-metadata", "artist=Dreamlight Neural Focus Studio",
             output_path,
         ]

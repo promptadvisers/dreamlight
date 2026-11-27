@@ -852,7 +852,7 @@ def render_track(
         cmd += ["-c:a", "libmp3lame", "-b:a", bitrate, "-joint_stereo", "0"]
 
     cmd += [
-        "-metadata", f"title={track['title']} — {track['band']}",
+        "-metadata", f"title={track['title']} - {track['band']}",
         "-metadata", "artist=Dreamlight Neural Focus Studio",
         "-metadata", f"comment={track['band']} | {track['binaural']} | {track['bpm']} BPM | {track['key']}",
         str(out),

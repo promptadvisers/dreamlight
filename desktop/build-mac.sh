@@ -19,4 +19,4 @@ for kv in "CFBundleName Dreamlight" "CFBundleDisplayName Dreamlight" "CFBundleId
 /usr/libexec/PlistBuddy -c "Delete :ElectronAsarIntegrity" "$P" 2>/dev/null || true
 mv "$OUT/Contents/MacOS/Electron" "$OUT/Contents/MacOS/Dreamlight"; /usr/libexec/PlistBuddy -c "Set :CFBundleExecutable Dreamlight" "$P"
 codesign --force --deep --sign - "$OUT"
-if [ "$INSTALL" = "--install" ]; then pkill -f "/Applications/Dreamlight.app/Contents/MacOS/Dreamlight" || true; rm -rf /Applications/Dreamlight.app; ditto "$OUT" /Applications/Dreamlight.app; echo "Installed /Applications/Dreamlight.app"; fi
+if [ "$INSTALL" = "--install" ]; then pkill -f "/Applications/Dreamlight.app/Contents/MacOS/Dreamlight" || true; rm -rf /Applications/Dreamlight.app; ditto "$OUT" /Applications/Dreamlight.app; rm -rf "$D/dist"; echo "Installed /Applications/Dreamlight.app"; fi

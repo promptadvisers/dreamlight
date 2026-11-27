@@ -217,9 +217,9 @@ async function createWindow() {
     minHeight: 640,
     backgroundColor: "#0a0e17",
     title: "Dreamlight",
-    // Same chrome as the Claude version: no title bar, traffic lights inside the header.
-    titleBarStyle: "hidden",
-    trafficLightPosition: { x: 12, y: 12 },
+    // Same chrome as the Claude version on a Mac: no title bar, traffic lights inside the header.
+    // Windows and Linux keep their normal frame so the window buttons stay visible.
+    ...(process.platform === "darwin" ? { titleBarStyle: "hidden", trafficLightPosition: { x: 12, y: 12 } } : {}),
     webPreferences: {
       preload: path.join(__dirname, "player-preload.js"),
       contextIsolation: true,
